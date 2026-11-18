@@ -189,7 +189,7 @@ $('areaForm').onsubmit=e=>{e.preventDefault();if(!requireP('admin'))return;let a
 setTimeout(()=>{$('intro').style.opacity=0;setTimeout(()=>$('intro').remove(),550)},2200);
 try{let u=deviceRole==='distributor'?JSON.parse(nativeHost.distributorSession()||'null'):lookup(data.users,sessionStorage.getItem(sessions));if(u)setUser(u);else show('login')}catch{show('login')}
 if(nativeHost){
- document.querySelector('header small').textContent='إدارة المستفيدين ودورات التوزيع · أندرويد 0.2.10 تجريبي';
+ document.querySelector('header small').textContent='إدارة المستفيدين ودورات التوزيع · أندرويد 0.2.11 تجريبي';
  document.querySelector('main>.warn').textContent='نسخة تجربة المزامنة المحلية عبر Wi-Fi والتوزيع دون اتصال. استخدم بيانات وهمية فقط.';
  const roleLabel=({independent:'مستقل',mother:'الجوال الأم',pending:'طلب ربط معلق',distributor:'موزع مقترن',locked:'مقفل'}[deviceRole]||'غير معروف');
  function settingsGroup(target,title){const section=document.createElement('div');section.className='panel';const h=document.createElement('h3');h.textContent=title;section.append(h);const stack=document.createElement('div');stack.className='settings-stack';section.append(stack);$(target).append(section);return {section,stack}}

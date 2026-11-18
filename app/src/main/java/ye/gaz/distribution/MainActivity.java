@@ -220,22 +220,54 @@ public final class MainActivity extends Activity {
     private void chooseFamilies(String admin,String child,String cycle){
         if(!adminAllowed(admin))return;
         try{
-            JSONObject state=pairing.status(),data=new JSONObject(store.readState()),c=SyncRules.find(data.getJSONArray("cycles"),cycle),grants=SyncRules.map(state,"grants");
-            java.util.ArrayList<JSONObject> families=new java.util.ArrayList<>();JSONArray all=data.getJSONArray("families");
-            for(int i=0;i<all.length();i++){JSONObject f=all.getJSONObject(i);String id=f.getString("id");if(!grants.has(SyncRules.key(cycle,id))&&SyncRules.delivery(data,cycle,id)==null)families.add(f);}
-            if(families.isEmpty()){msg("لا توجد أسر متاحة للتخصيص في هذه الدورة");return;}
-            java.util.ArrayList<String> selected=new java.util.ArrayList<>();
-            LinearLayout p=pairLayout();pairText(p,"الحد لكل أسرة: "+c.getInt("quota")+" أسطوانة. لا يمكن نقل التخصيص إلى موزع آخر في هذه النسخة.");
-            EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث باسم الأسرة أو المنزل أو المربع");p.addView(search);
-            LinearLayout rows=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(rows);p.addView(scroll,new LinearLayout.LayoutParams(-1,(int)(300*getResources().getDisplayMetrics().density)));
-            Runnable render=()->{rows.removeAllViews();String q=search.getText().toString().trim();for(JSONObject f:families){String id=f.optString("id"),label=f.optInt("no")+" · "+f.optString("name")+" — منزل "+f.optString("house")+" | مربع "+f.optString("square","");if(!q.isEmpty()&&!DistributorUsers.normalize(label).contains(DistributorUsers.normalize(q)))continue;
-                CheckBox check=new CheckBox(this);check.setText(label);check.setChecked(selected.contains(id));check.setOnCheckedChangeListener((v,on)->{if(on){if(!selected.contains(id))selected.add(id);}else selected.remove(id);});rows.addView(check);}};
+            JSONObject state=pairing.status(),data=new JSONObject(store.readState()),c=SyncRules.find(data.getJSONArray("cycles"),cycle);
+            AllocationSelection selection=new AllocationSelection(data,SyncRules.map(state,"grants"),cycle);
+            if(selection.total()==0){msg("لا توجد أسر متاحة للتخصيص في هذه الدورة");return;}
+            String childName=SyncRules.child(state,child).getString("name");
+            LinearLayout p=pairLayout();pairText(p,"الموزع: "+childName+" | "+c.getString("title")+"\nالاستحقاق لكل أسرة: "+c.getInt("quota")+" أسطوانة");
+            EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث بالاسم أو الرقم أو المنزل أو المربع");p.addView(search);
+            java.util.ArrayList<String> squareKeys=new java.util.ArrayList<>(),squareNames=new java.util.ArrayList<>();
+            squareKeys.add(null);squareNames.add("كل المربعات");
+            for(java.util.Map.Entry<String,String> e:selection.squares().entrySet()){squareKeys.add(e.getKey());squareNames.add(e.getKey().isEmpty()?e.getValue():"مربع: "+e.getValue());}
+            Spinner squares=new Spinner(this);ArrayAdapter<String> squareAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,squareNames);squareAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);squares.setAdapter(squareAdapter);p.addView(squares);
+            TextView summary=new TextView(this);summary.setPadding(0,8,0,8);p.addView(summary);
+            LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.HORIZONTAL);p.addView(actions,new LinearLayout.LayoutParams(-1,-2));
+            Button select=new Button(this),unselect=new Button(this);select.setAllCaps(false);unselect.setAllCaps(false);actions.addView(select,new LinearLayout.LayoutParams(0,-2,1));actions.addView(unselect,new LinearLayout.LayoutParams(0,-2,1));unselect.setText("إلغاء تحديد الظاهر");
+            Button clear=new Button(this);clear.setAllCaps(false);clear.setText("إلغاء جميع التحديدات");p.addView(clear);
+            ListView list=new ListView(this);list.setDividerHeight(1);list.setChoiceMode(ListView.CHOICE_MODE_NONE);p.addView(list,new LinearLayout.LayoutParams(-1,(int)(Math.min(300,getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density*0.32f)*getResources().getDisplayMetrics().density)));
+            java.util.ArrayList<JSONObject> visible=new java.util.ArrayList<>();
+            BaseAdapter adapter=new BaseAdapter(){
+                public int getCount(){return visible.size();}
+                public Object getItem(int i){return visible.get(i);}
+                public long getItemId(int i){return i;}
+                public android.view.View getView(int pos,android.view.View reused,android.view.ViewGroup parent){
+                    CheckedTextView v=reused instanceof CheckedTextView?(CheckedTextView)reused:(CheckedTextView)getLayoutInflater().inflate(android.R.layout.simple_list_item_multiple_choice,parent,false);
+                    JSONObject f=visible.get(pos);v.setText(AllocationSelection.label(f));v.setChecked(selection.checked(f.optString("id")));v.setTextSize(15);v.setSingleLine(false);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);return v;
+                }
+            };
+            list.setAdapter(adapter);
+            Runnable update=()->{int checked=selection.countVisible(visible);summary.setText("المحدد: "+selection.count()+" من "+selection.total()+" | الظاهر: "+visible.size()+" (محدد "+checked+")");select.setEnabled(checked<visible.size());unselect.setEnabled(checked>0);clear.setEnabled(selection.count()>0);};
+            Runnable render=()->{int idx=squares.getSelectedItemPosition();String square=idx<0?null:squareKeys.get(idx);visible.clear();visible.addAll(selection.visible(search.getText().toString(),square));select.setText(square==null&&AllocationSelection.norm(search.getText().toString()).isEmpty()?"تحديد الكل":"تحديد الظاهر");adapter.notifyDataSetChanged();update.run();};
+            select.setOnClickListener(v->{selection.setAll(visible,true);adapter.notifyDataSetChanged();update.run();});
+            unselect.setOnClickListener(v->{selection.setAll(visible,false);adapter.notifyDataSetChanged();update.run();});
+            clear.setOnClickListener(v->{selection.clear();adapter.notifyDataSetChanged();update.run();});
+            list.setOnItemClickListener((parent,v,pos,id)->{String f=visible.get(pos).optString("id");selection.set(f,!selection.checked(f));adapter.notifyDataSetChanged();update.run();});
+            squares.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(AdapterView<?> parent,android.view.View view,int position,long id){render.run();}public void onNothingSelected(AdapterView<?> parent){}});
             search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){render.run();}public void afterTextChanged(android.text.Editable e){}});
             render.run();
-            AlertDialog dlg=new AlertDialog.Builder(this).setTitle("حدد الأسر المطلوبة").setView(p).setNegativeButton("إلغاء",null).setPositiveButton("اعتماد التخصيص",null).create();
-            dlg.setOnShowListener(v->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{if(selected.isEmpty()){msg("حدد أسرة واحدة على الأقل");return;}new AlertDialog.Builder(this).setTitle("تأكيد تخصيص "+selected.size()+" أسرة؟").setMessage("ستحجز هذه الأسر لهذا الموزع حصريًا في الدورة المحددة.").setNegativeButton("رجوع",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.allocate(child,cycle,selected);dlg.dismiss();notifyPairChange();msg("تم حفظ التخصيصات؛ بانتظار المزامنة");}catch(Exception e){msg("تعذر التخصيص؛ قد تكون الأسرة حُجزت أو استلمت بالفعل");}}).show();}));dlg.show();
+            AlertDialog dlg=new AlertDialog.Builder(this).setTitle("تخصيص الأسر جماعيًا").setView(p).setNegativeButton("إلغاء",null).setPositiveButton("اعتماد التخصيص",null).create();
+            dlg.setOnShowListener(v->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{
+                if(selection.count()==0){msg("حدد أسرة واحدة على الأقل");return;}
+                final java.util.List<String> ids=selection.ids();
+                new AlertDialog.Builder(this).setTitle("تأكيد تخصيص "+ids.size()+" أسرة؟").setMessage("الموزع: "+childName+"\nالدورة: "+c.optString("title")+"\nسيتم حجز الأسر المحددة حصريًا لهذا الموزع. تشمل العملية أي أسر حددتها في مربعات أو نتائج بحث سابقة.").setNegativeButton("رجوع",null).setPositiveButton("تأكيد",(x,y)->{
+                    if(!adminAllowed(admin))return;
+                    ProgressDialog busy=ProgressDialog.show(this,"التخصيص","جارٍ حفظ التخصيصات…",true,false);
+                    workers.execute(()->{try{synchronized(store){if(!store.admin(admin))throw new SecurityException("Admin required");pairing.allocate(child,cycle,ids);}runOnUiThread(()->{busy.dismiss();dlg.dismiss();notifyPairChange();msg("تم تخصيص "+ids.size()+" أسرة؛ بانتظار المزامنة");});}catch(Exception e){runOnUiThread(()->{busy.dismiss();msg("تعذر التخصيص؛ قد تكون إحدى الأسر حُجزت أو استلمت بالفعل. لم تُعتمد دفعة جزئية.");});}});
+                }).show();
+            }));dlg.show();dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         }catch(Exception e){msg("تعذر فتح قائمة الأسر");}
     }
+    
     private void motherAllocations(String admin){
         if(!adminAllowed(admin))return;
         try{
