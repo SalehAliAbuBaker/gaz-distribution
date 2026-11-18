@@ -48,4 +48,11 @@ public class SyncRulesTest {
         Fixture f=new Fixture();f.grant();JSONObject old=SyncRules.copy(f.local);f.sync();SyncRules.record(f.as,f.k,1,f.a.getPrivate());f.sync();
         assertThrows(Exception.class,()->SyncRules.protectMother(f.ms,f.local,old));JSONObject next=SyncRules.copy(f.local);next.getJSONArray("cycles").getJSONObject(0).put("closed",true);SyncRules.protectMother(f.ms,f.local,next);
     }
+    @Test public void squareUpdatesOnExistingGrantWithoutChangingReceipt()throws Exception{
+        Fixture f=new Fixture();f.grant();f.sync();assertEquals("",SyncRules.map(f.as,"squareLabels").getString(f.k));
+        SyncRules.record(f.as,f.k,1,f.a.getPrivate());f.sync();
+        String packet=SyncRules.map(f.as,"grants").getString(f.k),receipt=SyncRules.map(f.as,"outbox").getString(f.k);
+        f.local.getJSONArray("families").getJSONObject(0).put("square","المربع ٣");f.sync();
+        assertEquals("المربع ٣",SyncRules.map(f.as,"squareLabels").getString(f.k));assertEquals(packet,SyncRules.map(f.as,"grants").getString(f.k));assertEquals(receipt,SyncRules.map(f.as,"outbox").getString(f.k));assertEquals(1,f.local.getJSONArray("deliveries").length());
+    }
 }
