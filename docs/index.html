@@ -134,14 +134,14 @@ $('areaForm').onsubmit=e=>{e.preventDefault();if(!requireP('admin'))return;let a
 setTimeout(()=>{$('intro').style.opacity=0;setTimeout(()=>$('intro').remove(),550)},2200);
 try{let u=lookup(data.users,sessionStorage.getItem(sessions));if(u)setUser(u);else show('login')}catch{show('login')}
 if(nativeHost){
- document.querySelector('header small').textContent='إدارة المستفيدين ودورات التوزيع · أندرويد 0.2.2 تجريبي';
+ document.querySelector('header small').textContent='إدارة المستفيدين ودورات التوزيع · أندرويد 0.2.3 تجريبي';
  document.querySelector('main>.warn').textContent='نسخة اختبار الاقتران بالجوالات. لا مزامنة أو توزيع من الجهاز الفرعي بعد. استخدم بيانات وهمية فقط.';
  const panel=document.createElement('div');panel.className='panel';
  const title=document.createElement('h3');title.textContent='البيانات والنسخ الاحتياطي';panel.append(title);
  const info=document.createElement('p');info.textContent='هوية الجهاز: '+nativeHost.deviceId()+' | '+({independent:'مستقل',mother:'الجوال الأم',pending:'طلب ربط معلق',distributor:'موزع مقترن',locked:'مقفل'}[deviceRole]||'غير معروف');panel.append(info);
  const manage=document.createElement('button');manage.type='button';manage.textContent='إدارة الجوالات والاقتران QR';manage.onclick=()=>{if(requireP('admin'))nativeHost.manageDevices(activeUser.id)};panel.append(manage,document.createTextNode(' '));
  if(deviceRole!=='independent')document.getElementById('areaForm').hidden=true;
- for(const [label,fn] of [['إنشاء نسخة احتياطية مشفرة',()=>nativeHost.backup()],['استعادة نسخة احتياطية',()=>nativeHost.restore()]]){if(deviceRole!=='independent'&&label.includes('استعادة'))continue;const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{if(requireP('admin'))fn()};panel.append(b,document.createTextNode(' '))}
+ for(const [label,fn] of [['إنشاء نسخة احتياطية مشفرة (.json.gz)',()=>nativeHost.backup()],['استعادة نسخة احتياطية',()=>nativeHost.restore()]]){if(deviceRole!=='independent'&&label.includes('استعادة'))continue;const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{if(requireP('admin'))fn()};panel.append(b,document.createTextNode(' '))}
  document.getElementById('settings').append(panel);
  if(pairRestricted){document.getElementById('areaForm').hidden=true;if(activeUser)show('home');}
  window.addEventListener('gaz-restore-complete',()=>{sessionStorage.removeItem(sessions);location.reload()});

@@ -20,11 +20,9 @@ import java.nio.ByteBuffer;
 
 final class GazStore extends SQLiteOpenHelper {
     private static final String KEY = "gaz-record-encryption-v1";
-    private static final byte[] MAGIC = {'G','A','Z','B',1};
     static final int MAX = 64 * 1024 * 1024;
     private static final String[] KINDS={"families","cycles","deliveries","users"};
     private final SecretKey secret;
-    private final SecureRandom rng=new SecureRandom();
     GazStore(Context c) throws Exception {
         super(c,"gaz-encrypted-records.db",null,2);
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
@@ -133,20 +131,11 @@ final class GazStore extends SQLiteOpenHelper {
             }db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
-    private static SecretKey backupKey(char[] pass,byte[] salt) throws Exception {
-        PBEKeySpec spec=new PBEKeySpec(pass,salt,310000,256);
-        try{return new SecretKeySpec(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded(),"AES");}finally{spec.clearPassword();}
-    }
     synchronized byte[] backup(char[] pass) throws Exception {
         String contents=readState();if("null".equals(contents))throw new IllegalStateException("No data");
-        byte[] salt=new byte[16],iv=new byte[12];rng.nextBytes(salt);rng.nextBytes(iv);
-        Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,backupKey(pass,salt),new GCMParameterSpec(128,iv));c.updateAAD(MAGIC);byte[] body=c.doFinal(utf(contents));
-        return ByteBuffer.allocate(MAGIC.length+salt.length+iv.length+body.length).put(MAGIC).put(salt).put(iv).put(body).array();
+        return GazBackupCodec.encode(contents,pass);
     }
     static String decodeBackup(byte[] bytes,char[] pass) throws Exception {
-        if(bytes.length<49||bytes.length>MAX)throw new IllegalArgumentException("Invalid backup size");
-        ByteBuffer b=ByteBuffer.wrap(bytes);byte[] magic=new byte[5],salt=new byte[16],iv=new byte[12];b.get(magic);b.get(salt);b.get(iv);if(!Arrays.equals(MAGIC,magic))throw new IllegalArgumentException("Unknown backup format");
-        byte[] payload=new byte[b.remaining()];b.get(payload);Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,backupKey(pass,salt),new GCMParameterSpec(128,iv));c.updateAAD(MAGIC);
-        String json=new String(c.doFinal(payload),StandardCharsets.UTF_8);flatten(new JSONObject(json));return json;
+        String json=GazBackupCodec.decode(bytes,pass);flatten(new JSONObject(json));return json;
     }
 }
