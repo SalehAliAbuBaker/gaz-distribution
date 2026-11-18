@@ -14,7 +14,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
@@ -22,12 +21,16 @@ jobs:
         shell: bash
         run: |
           set -e
-          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           if [ -z "$sdk" ]; then echo "Android SDK not found"; exit 1; fi
           if [ ! -f "$sdk/platforms/android-34/android.jar" ] || [ ! -d "$sdk/build-tools/34.0.0" ]; then
-            sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+            manager="$(find "$sdk/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n1)"
+            if [ -z "$manager" ]; then echo "sdkmanager not found under $sdk"; exit 1; fi
+            export ANDROID_HOME="$sdk" ANDROID_SDK_ROOT="$sdk"
+            "$manager" --sdk_root="$sdk" --install "platforms;android-34" "build-tools;34.0.0"
           fi
           test -f "$sdk/platforms/android-34/android.jar"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
