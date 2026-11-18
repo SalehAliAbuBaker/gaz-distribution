@@ -31,6 +31,7 @@ public final class MainActivity extends Activity {
     private WebView web;
     private GazStore store;
     private File pending;
+    private String restoreAdmin;
     private final ExecutorService workers=Executors.newSingleThreadExecutor();
     private String device;
     private GazPairing pairing;
@@ -47,7 +48,7 @@ public final class MainActivity extends Activity {
         try{pairing=new GazPairing(store,device);}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر التحقق من هوية الجهاز").setMessage("بياناتك محفوظة. لا تحذف التطبيق.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
         if(saved!=null){scanMode=saved.getString("scanMode");scanAdmin=saved.getString("scanAdmin");}
         cleanCache();
-        if(saved!=null){String path=saved.getString("pending");if(path!=null){File f=new File(path);if(f.isFile()&&f.getParentFile().equals(outDir()))pending=f;}}
+        if(saved!=null){restoreAdmin=saved.getString("restoreAdmin");String path=saved.getString("pending");if(path!=null){File f=new File(path);if(f.isFile()&&f.getParentFile().equals(outDir()))pending=f;}}
         web=new WebView(this);
         WebView.setWebContentsDebuggingEnabled(false);
         WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setAllowFileAccessFromFileURLs(false);s.setAllowUniversalAccessFromFileURLs(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setJavaScriptCanOpenWindowsAutomatically(false);s.setSupportMultipleWindows(false);
@@ -83,8 +84,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void centralAccounts(String admin){runOnUiThread(()->centralDevices(admin));}
         @JavascriptInterface public void chooseLoginRole(String admin,String selected){runOnUiThread(()->setupLoginRole(admin,selected));}
         @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
-        @JavascriptInterface public void backup(){if(!isDistributor())runOnUiThread(()->askPass(true,null));}
-        @JavascriptInterface public void restore(){runOnUiThread(()->{try{if(!store.role().equals("independent")){msg("الاستعادة بعد الاقتران تحتاج آلية استرداد السلطة؛ غير متاحة الآن");return;}}catch(Exception e){msg("تعذر التحقق من حالة الربط");return;}Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,RESTORE);});}
+        @JavascriptInterface public void backup(String admin){runOnUiThread(()->{if(backupAllowed(admin))askPass(true,null,false,admin);});}
+        @JavascriptInterface public void cloudBackup(String admin){runOnUiThread(()->{if(!backupAllowed(admin))return;new AlertDialog.Builder(MainActivity.this).setTitle("نسخة سحابية مشفرة").setMessage("سيتم إنشاء ملف مشفر بصيغة json.gz. بعد إنشائه اختر حفظه في Google Drive أو خدمة تخزين سحابية لديك. التطبيق لا يرسل البيانات تلقائيًا، وتبقى القاعدة محلية.").setNegativeButton("إلغاء",null).setPositiveButton("متابعة",(d,w)->askPass(true,null,true,admin)).show();});}
+        @JavascriptInterface public void restore(String admin){runOnUiThread(()->{if(!backupAllowed(admin))return;closeLan();restoreAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(i,RESTORE);}catch(Exception e){restoreAdmin=null;msg("تعذر فتح الملفات");}});}
         @JavascriptInterface public void shareText(String text){if(isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
         @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,0);}
         @JavascriptInterface public void shareDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,1);}
@@ -447,17 +449,27 @@ public final class MainActivity extends Activity {
             }
         },new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).build());
     }
-    private void askPass(boolean backup,Uri uri){
+    private boolean backupAllowed(String admin){
+        try{String role=store.role();if(("mother".equals(role)||"independent".equals(role))&&adminAllowed(admin))return true;}catch(Exception ignored){}
+        msg("يلزم حساب مدير الجوال الأم أو الجهاز المستقل");return false;
+    }
+    private void cloudShare(File f){
+        try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",f);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/gzip");i.putExtra(Intent.EXTRA_STREAM,uri);i.setClipData(ClipData.newRawUri("نسخة احتياطية مشفرة",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"اختر Drive أو خدمة التخزين السحابي"));}catch(Exception e){msg("تعذرت المشاركة؛ استخدم حفظ النسخة محليًا ثم ارفعها إلى السحابة");}
+    }
+    private void askPass(boolean backup,Uri uri,boolean cloud,String admin){
+        if(!backupAllowed(admin))return;
         EditText password=new EditText(this);password.setSingleLine(true);password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);password.setHint("كلمة مرور النسخة (8 أحرف فأكثر)");
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(backup?"تشفير النسخة الاحتياطية":"فك تشفير النسخة الاحتياطية").setMessage(backup?"احتفظ بكلمة المرور خارج هذا الجوال. لا يمكن استردادها.":"لن تتغير البيانات قبل التحقق والتأكيد.").setView(password).setNegativeButton("إلغاء",null).setPositiveButton("متابعة",null).create();
         dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{char[] pass=password.getText().toString().toCharArray();if(pass.length<8){Arrays.fill(pass,'\0');password.setError("8 أحرف على الأقل");return;}password.setText("");dialog.dismiss();
-            workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("gaz_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->savePicker(f,"application/gzip"));}else{
+            workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("gaz_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->{if(!backupAllowed(admin))return;if(cloud)cloudShare(f);else savePicker(f,"application/gzip");});}else{
                 byte[] bytes;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();bytes=readLimited(in);}
-                String json=GazStore.decodeBackup(bytes,pass);
-                runOnUiThread(()->new AlertDialog.Builder(this).setTitle("استبدال البيانات المحلية؟").setMessage("النسخة صحيحة. ستستبدل جميع البيانات والحسابات على هذا الجهاز. يوصى بحفظ نسخة احتياطية أولًا.").setNegativeButton("إلغاء",null).setPositiveButton("استعادة",(d,b)->workers.execute(()->{try{store.restoreIndependent(json);runOnUiThread(()->web.evaluateJavascript("window.dispatchEvent(new Event('gaz-restore-complete'))",null));msg("تمت الاستعادة");}catch(Exception e){msg("فشلت الاستعادة؛ لم تُعتمد بيانات جديدة");}})).show());
-            }}catch(Exception e){msg(backup?"تعذر إنشاء النسخة الاحتياطية":"تعذر فتح النسخة؛ تحقق من الملف وكلمة المرور");}finally{Arrays.fill(pass,'\0');}});
+                String json=GazStore.decodeBackup(bytes,pass);JSONObject checked=store.previewRestore(json);boolean mother="mother".equals(store.role());
+                String summary="الأسر: "+checked.getJSONArray("families").length()+" | الدورات: "+checked.getJSONArray("cycles").length()+" | حركات التسليم: "+checked.getJSONArray("deliveries").length();
+                runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تأكيد استعادة النسخة").setMessage(summary+"\n\n"+(mother?"سيتم استعادة البيانات المتوافقة مع سجل التسليم الحالي، دون تغيير هوية الأم أو التخصيصات أو المستخدمين والصلاحيات.":"ستستبدل البيانات والحسابات المحلية. احفظ نسخة حالية أولًا.")).setNegativeButton("إلغاء",null).setPositiveButton("استعادة",(d,b)->{if(!backupAllowed(admin))return;closeLan();workers.execute(()->{try{synchronized(store){if(!store.admin(admin))throw new SecurityException("Admin required");store.restoreSafe(json);}runOnUiThread(()->{if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-restore-complete'))",null);});msg("تمت الاستعادة بنجاح");}catch(BackupRestore.Refused e){restoreWarning(e.getMessage());}catch(Exception e){restoreWarning("فشلت الاستعادة؛ لم تُعتمد بيانات جديدة");}});}).show());
+            }}catch(BackupRestore.Refused e){restoreWarning(e.getMessage());}catch(Exception e){msg(backup?"تعذر إنشاء النسخة الاحتياطية":"تعذر فتح النسخة؛ تحقق من الملف وكلمة المرور");}finally{Arrays.fill(pass,'\0');}});
         }));dialog.show();
     }
+    private void restoreWarning(String reason){runOnUiThread(()->new AlertDialog.Builder(this).setTitle("لم تتم الاستعادة").setMessage(reason+"\nلم تُغيّر بيانات الجهاز.").setPositiveButton("إغلاق",null).show());}
     private static byte[] readLimited(InputStream in)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1){if(out.size()+n>GazStore.MAX)throw new IOException("Too large");out.write(b,0,n);}return out.toByteArray();}
     @Override protected void onActivityResult(int req,int result,Intent data){
         IntentResult scan=IntentIntegrator.parseActivityResult(req,result,data);
@@ -465,9 +477,9 @@ public final class MainActivity extends Activity {
         super.onActivityResult(req,result,data);
         if(req==SAVE){File f=pending;pending=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&f!=null){
             Uri uri=data.getData();workers.execute(()->{try(InputStream in=new FileInputStream(f);OutputStream out=getContentResolver().openOutputStream(uri,"w")){if(out==null)throw new IOException();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1)out.write(b,0,n);out.flush();msg("تم حفظ الملف");}catch(Exception e){msg("تعذر حفظ الملف");}});
-        }}else if(req==RESTORE&&result==RESULT_OK&&data!=null&&data.getData()!=null)askPass(false,data.getData());
+        }}else if(req==RESTORE){String admin=restoreAdmin;restoreAdmin=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&admin!=null)askPass(false,data.getData(),false,admin);}
     }
-    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());b.putString("scanMode",scanMode);b.putString("scanAdmin",scanAdmin);}
+    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());b.putString("scanMode",scanMode);b.putString("scanAdmin",scanAdmin);b.putString("restoreAdmin",restoreAdmin);}
     private void msg(String s){runOnUiThread(()->Toast.makeText(this,s,Toast.LENGTH_LONG).show());}
     @Override public void onBackPressed(){if(web!=null){web.evaluateJavascript("(function(){let p=document.getElementById('gazPreview');if(p&&!p.hidden){document.getElementById('gazPreviewClose').click();return;}if(typeof activeUser!=='undefined'&&activeUser&&current!=='home'){show('home');return;}alert('للخروج استخدم شاشة التطبيقات أو تسجيل الخروج.');})()",null);}else super.onBackPressed();}
     @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}closeLan();network.shutdownNow();workers.shutdown();super.onDestroy();}

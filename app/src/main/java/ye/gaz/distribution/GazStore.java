@@ -158,9 +158,18 @@ final class GazStore extends SQLiteOpenHelper {
     }
     synchronized byte[] backup(char[] pass) throws Exception {
         String contents=readState();if("null".equals(contents))throw new IllegalStateException("No data");
-        return GazBackupCodec.encode(contents,pass);
+        JSONObject snapshot=BackupRestore.snapshot(new JSONObject(contents),pairRead());
+        return GazBackupCodec.encode(snapshot.toString(),pass);
     }
     static String decodeBackup(byte[] bytes,char[] pass) throws Exception {
-        String json=GazBackupCodec.decode(bytes,pass);flatten(new JSONObject(json));return json;
+        String json=GazBackupCodec.decode(bytes,pass);JSONObject snapshot=new JSONObject(json);flatten(BackupRestore.data(snapshot));BackupRestore.authority(snapshot);return json;
+    }
+    synchronized JSONObject previewRestore(String snapshot)throws Exception{
+        String raw=readState();JSONObject current="null".equals(raw)?new JSONObject():new JSONObject(raw);
+        JSONObject next=BackupRestore.prepare(new JSONObject(snapshot),current,pairRead());flatten(next);return next;
+    }
+    synchronized void restoreSafe(String snapshot)throws Exception{
+        JSONObject next=previewRestore(snapshot);
+        writeState(next.toString());
     }
 }
