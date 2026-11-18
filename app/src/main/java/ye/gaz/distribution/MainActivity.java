@@ -18,7 +18,23 @@ public final class MainActivity extends Activity {
     private static final int GREEN=Color.rgb(20,92,77);
     @Override public void onCreate(Bundle s) {
         super.onCreate(s); db=new GasDb(this); prefs=getSharedPreferences("settings",MODE_PRIVATE);
-        if(!prefs.contains("area")) setup(); else home();
+        if(s==null) launchCredit(); else enterApp();
+    }
+    private void enterApp(){if(!prefs.contains("area")) setup(); else home();}
+    private void launchCredit(){
+        page();
+        root.setGravity(android.view.Gravity.CENTER);
+        root.setMinimumHeight(getResources().getDisplayMetrics().heightPixels-dp(90));
+        label(root,"توزيع الغاز",30).setGravity(android.view.Gravity.CENTER);
+        TextView credit=label(root,"تطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة",15);
+        credit.setGravity(android.view.Gravity.CENTER);
+        LinearLayout intro=root;
+        credit.postDelayed(()->{
+            if(isFinishing()||isDestroyed()||root!=intro)return;
+            credit.animate().alpha(0f).setDuration(500).withEndAction(()->{
+                if(!isFinishing()&&!isDestroyed()&&root==intro)enterApp();
+            }).start();
+        },2200);
     }
     private int dp(int p){return Math.round(p*getResources().getDisplayMetrics().density);}
     private void page(){
@@ -38,30 +54,43 @@ public final class MainActivity extends Activity {
         parent.addView(e); return e;
     }
     private void msg(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
+    private void settings(){
+        LinearLayout p=form();
+        button(p,"حول التطبيق وحقوق المطور",this::about);
+        button(p,"الدعم والمقترحات",this::support);
+        new AlertDialog.Builder(this).setTitle("الإعدادات").setView(p).setPositiveButton("إغلاق",null).show();
+    }
+    private void support(){
+        LinearLayout p=form();
+        TextView info=label(p,"للإبلاغ عن مشكلة أو إرسال اقتراح تطوير، استخدم بيانات التواصل التالية عند توفر الاتصال.",15);
+        TextView contact=label(p,"الهاتف والواتساب: +967 734 915 588\nالبريد الإلكتروني: saleh0129@gmail.com",16);
+        contact.setTextIsSelectable(true);
+        new AlertDialog.Builder(this).setTitle("الدعم والمقترحات").setView(p).setPositiveButton("إغلاق",null).show();
+    }
     private void about(){
         LinearLayout p=form();
         label(p,"توزيع الغاز",24);
-        label(p,"الإصدار "+"0.1.0",15);
+        label(p,"الإصدار 0.1.1",15);
         TextView info=label(p,"المطور: صالح علي أبوبكر الخطيب\nالدعم والتواصل (واتساب والهاتف): +967 734 915 588\nالبريد الإلكتروني: saleh0129@gmail.com\nجميع الحقوق محفوظة للمطور.",16);
         info.setTextIsSelectable(true);
         new AlertDialog.Builder(this).setTitle("حول التطبيق").setView(p).setPositiveButton("إغلاق",null).show();
     }
     private void setup(){
-        page(); label(root,"توزيع الغاز",26); label(root,"إعداد الحارة • نسخة محلية تجريبية 0.1.0",17);
+        page(); label(root,"توزيع الغاز",26); label(root,"إعداد الحارة • نسخة محلية تجريبية 0.1.1",17);
         EditText area=field(root,"اسم الحارة",false); area.setText("حارة الروضة");
         label(root,"للاختبار ببيانات وهمية فقط. ربط الموزعين والنسخ الاحتياطي غير متاحين بعد.",15);
-        button(root,"حول التطبيق",this::about);
+        button(root,"الإعدادات",this::settings);
         button(root,"إنشاء المنظومة المحلية",()->{String s=area.getText().toString().trim(); if(s.isEmpty()){msg("أدخل اسم الحارة");return;} prefs.edit().putString("area",s).apply();home();});
     }
     private void home(){
         page(); cycle=db.activeCycle();
         label(root,"توزيع الغاز – "+prefs.getString("area",""),24);
-        label(root,"0.1.0 | اختبار محلي على جهاز واحد فقط",14);
+        label(root,"0.1.1 | اختبار محلي على جهاز واحد فقط",14);
         label(root,cycle==null?"لا توجد دورة توزيع مفتوحة":"الدورة الحالية: "+cycle[1],19);
         button(root,"إضافة أسرة",this::addFamily);
         if(cycle==null) button(root,"فتح دورة توزيع",this::openCycle); else button(root,"إغلاق الدورة",this::confirmClose);
         button(root,"سجل الدورات والإحصائيات",this::history);
-        button(root,"حول التطبيق",this::about);
+        button(root,"الإعدادات",this::settings);
         search=field(root,"ابحث باسم الأسرة أو رقمها",false);
         rows=new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL); root.addView(rows);
         search.addTextChangedListener(new TextWatcher(){
