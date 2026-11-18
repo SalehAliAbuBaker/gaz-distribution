@@ -5,11 +5,13 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteConstraintException;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.view.View;
 import android.widget.*;
 import android.text.*;
 
 public final class MainActivity extends Activity {
+    private Typeface regular, bold;
     private GasDb db;
     private SharedPreferences prefs;
     private LinearLayout root, rows;
@@ -17,7 +19,7 @@ public final class MainActivity extends Activity {
     private String[] cycle;
     private static final int GREEN=Color.rgb(20,92,77);
     @Override public void onCreate(Bundle s) {
-        super.onCreate(s); db=new GasDb(this); prefs=getSharedPreferences("settings",MODE_PRIVATE);
+        super.onCreate(s); regular=getResources().getFont(R.font.tajawal_regular); bold=getResources().getFont(R.font.tajawal_bold); db=new GasDb(this); prefs=getSharedPreferences("settings",MODE_PRIVATE);
         if(s==null) launchCredit(); else enterApp();
     }
     private void enterApp(){if(!prefs.contains("area")) setup(); else home();}
@@ -43,13 +45,13 @@ public final class MainActivity extends Activity {
         scroll.addView(root); setContentView(scroll);
     }
     private TextView label(LinearLayout parent,String s,int size){
-        TextView t=new TextView(this); t.setText(s); t.setTextSize(size); t.setTextColor(GREEN); t.setPadding(0,dp(9),0,dp(6)); parent.addView(t); return t;
+        TextView t=new TextView(this); t.setText(s); t.setTextSize(size>=19?18:size<=15?12:14); t.setTypeface(size>=19?bold:regular); t.setTextColor(GREEN); t.setPadding(0,dp(9),0,dp(6)); parent.addView(t); return t;
     }
     private void button(LinearLayout parent,String s,Runnable action){
-        Button b=new Button(this); b.setText(s); b.setAllCaps(false); parent.addView(b); b.setOnClickListener(v->action.run());
+        Button b=new Button(this); b.setText(s); b.setAllCaps(false); b.setTypeface(bold); b.setTextSize(14); parent.addView(b); b.setOnClickListener(v->action.run());
     }
     private EditText field(LinearLayout parent,String hint,boolean numeric){
-        EditText e=new EditText(this); e.setHint(hint); e.setSingleLine(true);
+        EditText e=new EditText(this); e.setHint(hint); e.setSingleLine(true); e.setTypeface(regular); e.setTextSize(14);
         if(numeric)e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         parent.addView(e); return e;
     }
@@ -70,13 +72,13 @@ public final class MainActivity extends Activity {
     private void about(){
         LinearLayout p=form();
         label(p,"توزيع الغاز",24);
-        label(p,"الإصدار 0.1.1",15);
+        label(p,"الإصدار 0.1.2",15);
         TextView info=label(p,"المطور: صالح علي أبوبكر الخطيب\nالدعم والتواصل (واتساب والهاتف): +967 734 915 588\nالبريد الإلكتروني: saleh0129@gmail.com\nجميع الحقوق محفوظة للمطور.",16);
         info.setTextIsSelectable(true);
         new AlertDialog.Builder(this).setTitle("حول التطبيق").setView(p).setPositiveButton("إغلاق",null).show();
     }
     private void setup(){
-        page(); label(root,"توزيع الغاز",26); label(root,"إعداد الحارة • نسخة محلية تجريبية 0.1.1",17);
+        page(); label(root,"توزيع الغاز",26); label(root,"إعداد الحارة • نسخة محلية تجريبية 0.1.2",17);
         EditText area=field(root,"اسم الحارة",false); area.setText("حارة الروضة");
         label(root,"للاختبار ببيانات وهمية فقط. ربط الموزعين والنسخ الاحتياطي غير متاحين بعد.",15);
         button(root,"الإعدادات",this::settings);
@@ -85,7 +87,7 @@ public final class MainActivity extends Activity {
     private void home(){
         page(); cycle=db.activeCycle();
         label(root,"توزيع الغاز – "+prefs.getString("area",""),24);
-        label(root,"0.1.1 | اختبار محلي على جهاز واحد فقط",14);
+        label(root,"0.1.2 | اختبار محلي على جهاز واحد فقط",14);
         label(root,cycle==null?"لا توجد دورة توزيع مفتوحة":"الدورة الحالية: "+cycle[1],19);
         button(root,"إضافة أسرة",this::addFamily);
         if(cycle==null) button(root,"فتح دورة توزيع",this::openCycle); else button(root,"إغلاق الدورة",this::confirmClose);
