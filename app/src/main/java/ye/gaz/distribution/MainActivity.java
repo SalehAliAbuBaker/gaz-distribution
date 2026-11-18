@@ -81,6 +81,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void distributorLogout(){if(isDistributor())distributorSessionId=null;}
         @JavascriptInterface public void distributorAction(String action){runOnUiThread(()->openDistributorAction(action));}
         @JavascriptInterface public void centralAccounts(String admin){runOnUiThread(()->centralDevices(admin));}
+        @JavascriptInterface public void chooseLoginRole(String admin,String selected){runOnUiThread(()->setupLoginRole(admin,selected));}
         @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
         @JavascriptInterface public void backup(){if(!isDistributor())runOnUiThread(()->askPass(true,null));}
         @JavascriptInterface public void restore(){runOnUiThread(()->{try{if(!store.role().equals("independent")){msg("الاستعادة بعد الاقتران تحتاج آلية استرداد السلطة؛ غير متاحة الآن");return;}}catch(Exception e){msg("تعذر التحقق من حالة الربط");return;}Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,RESTORE);});}
@@ -146,6 +147,14 @@ public final class MainActivity extends Activity {
             }
             d.show();
         }catch(Exception e){msg("تعذر فتح إدارة الجوالات؛ لم يتم تغيير بياناتك");}
+    }
+    private void setupLoginRole(String admin,String selected){
+        if(!adminAllowed(admin))return;
+        try{if(!"independent".equals(store.role()))return;
+            if("distributor".equals(selected)){manageDevicesScreen(admin);return;}
+            if(!"mother".equals(selected))return;
+            new AlertDialog.Builder(this).setTitle("سيرفر (الأم)").setMessage("هل تريد تعيين هذا الجهاز جوالًا أم لهذه الحارة؟ لا يمكن تغيير الدور بعد الاقتران من شاشة الدخول.").setNegativeButton("لاحقًا",null).setPositiveButton("تعيين الأم",(v,w)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();notifyPairChange();}catch(Exception e){msg("تعذر تعيين الأم؛ تحقق من اسم الحارة");}}).show();
+        }catch(Exception e){msg("تعذر التحقق من نوع الجهاز");}
     }
     private void centralDevices(String admin){
         if(!adminAllowed(admin))return;

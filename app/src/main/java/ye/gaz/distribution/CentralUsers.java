@@ -56,11 +56,16 @@ final class CentralUsers {
         JSONArray next=new JSONArray();for(int i=0;i<all.length();i++){JSONObject u=all.getJSONObject(i);next.put(u.getString("id").equals(id)?a:u);}if(old==null)next.put(a);
         p.put("users",validate(next)).put("revision",Math.addExact(rev(p),1));
     }
+    static boolean same(Object a,Object b)throws Exception{
+        if(a instanceof JSONObject&&b instanceof JSONObject){JSONObject x=(JSONObject)a,y=(JSONObject)b;if(x.length()!=y.length())return false;for(Iterator<String> it=x.keys();it.hasNext();){String k=it.next();if(!y.has(k)||!same(x.get(k),y.get(k)))return false;}return true;}
+        if(a instanceof JSONArray&&b instanceof JSONArray){JSONArray x=(JSONArray)a,y=(JSONArray)b;if(x.length()!=y.length())return false;for(int i=0;i<x.length();i++)if(!same(x.get(i),y.get(i)))return false;return true;}
+        if(a instanceof Number&&b instanceof Number)return a.toString().equals(b.toString());return Objects.equals(a,b);
+    }
     static void accept(JSONObject s,JSONObject response)throws Exception{
         if(!response.has("accountPolicy")){SyncRules.require(revision(s)==0,"Policy missing");return;}
         JSONObject p=response.getJSONObject("accountPolicy");long n=p.getLong("revision"),cur=revision(s);SyncRules.require(n>0&&n>=cur,"Stale policy");
         JSONObject v=new JSONObject().put("revision",n).put("users",validate(p.getJSONArray("users")));
-        if(n==cur){SyncRules.require(s.getJSONObject("centralAccounts").similar(v),"Conflicting policy");return;}
+        if(n==cur){SyncRules.require(same(s.getJSONObject("centralAccounts"),v),"Conflicting policy");return;}
         s.put("centralAccounts",v);
     }
 }
