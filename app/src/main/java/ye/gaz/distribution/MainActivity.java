@@ -227,8 +227,8 @@ public final class MainActivity extends Activity {
             LinearLayout p=pairLayout();pairText(p,"الموزع: "+childName+" | "+c.getString("title")+"\nالاستحقاق لكل أسرة: "+c.getInt("quota")+" أسطوانة");
             EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث بالاسم أو الرقم أو المنزل أو المربع");p.addView(search);
             java.util.ArrayList<String> squareKeys=new java.util.ArrayList<>(),squareNames=new java.util.ArrayList<>();
-            squareKeys.add(null);squareNames.add("كل المربعات");
-            for(java.util.Map.Entry<String,String> e:selection.squares().entrySet()){squareKeys.add(e.getKey());squareNames.add(e.getKey().isEmpty()?e.getValue():"مربع: "+e.getValue());}
+            squareKeys.add(null);squareNames.add("جميع المستفيدين المتاحين ("+selection.total()+")");
+            for(java.util.Map.Entry<String,String> e:selection.squares().entrySet()){squareKeys.add(e.getKey());squareNames.add((e.getKey().isEmpty()?e.getValue():"مربع: "+e.getValue())+" ("+selection.visible("",e.getKey()).size()+")");}
             Spinner squares=new Spinner(this);ArrayAdapter<String> squareAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,squareNames);squareAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);squares.setAdapter(squareAdapter);p.addView(squares);
             TextView summary=new TextView(this);summary.setPadding(0,8,0,8);p.addView(summary);
             LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.HORIZONTAL);p.addView(actions,new LinearLayout.LayoutParams(-1,-2));
@@ -247,7 +247,7 @@ public final class MainActivity extends Activity {
             };
             list.setAdapter(adapter);
             Runnable update=()->{int checked=selection.countVisible(visible);summary.setText("المحدد: "+selection.count()+" من "+selection.total()+" | الظاهر: "+visible.size()+" (محدد "+checked+")");select.setEnabled(checked<visible.size());unselect.setEnabled(checked>0);clear.setEnabled(selection.count()>0);};
-            Runnable render=()->{int idx=squares.getSelectedItemPosition();String square=idx<0?null:squareKeys.get(idx);visible.clear();visible.addAll(selection.visible(search.getText().toString(),square));select.setText(square==null&&AllocationSelection.norm(search.getText().toString()).isEmpty()?"تحديد الكل":"تحديد الظاهر");adapter.notifyDataSetChanged();update.run();};
+            Runnable render=()->{int idx=squares.getSelectedItemPosition();String square=idx<0?null:squareKeys.get(idx);visible.clear();visible.addAll(selection.visible(search.getText().toString(),square));select.setText(AllocationSelection.norm(search.getText().toString()).isEmpty()?(square==null?"تحديد الجميع":"تحديد المربع بالكامل"):"تحديد نتائج البحث");adapter.notifyDataSetChanged();update.run();};
             select.setOnClickListener(v->{selection.setAll(visible,true);adapter.notifyDataSetChanged();update.run();});
             unselect.setOnClickListener(v->{selection.setAll(visible,false);adapter.notifyDataSetChanged();update.run();});
             clear.setOnClickListener(v->{selection.clear();adapter.notifyDataSetChanged();update.run();});
@@ -281,7 +281,7 @@ public final class MainActivity extends Activity {
             if(!deliver&&!DistributorUsers.allowed(user,"view")){msg("لا توجد صلاحية للبحث");return;}
             JSONArray all=pairing.allocations();JSONObject found=null;for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);if(r.getString("key").equals(key)){found=r;break;}}
             if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
-            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no")+"\nالمنزل: "+row.getString("house")+"\nمربع: "+row.optString("square","—")+"\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+"\n"+deliveryDescription(row));
+            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nالمنزل: "+row.getString("house")+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" أسطوانة");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
             AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
             if(deliver&&!row.getBoolean("done"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
             d.show();
