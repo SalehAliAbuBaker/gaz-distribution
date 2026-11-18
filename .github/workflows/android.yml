@@ -34,7 +34,7 @@ jobs:
           test -f "$sdk/platforms/android-34/android.jar"
           echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
       - name: Build debug APK
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
       - name: Verify APK and compare previous test signature
         id: signer
         shell: bash
@@ -61,4 +61,19 @@ jobs:
         with:
           name: Gaz-Distribution-0.2.3-test
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Prepare owner offline signing package
+        shell: bash
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/34.0.0"
+          mkdir -p signing-input
+          "$bt/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk signing-input/gaz-unsigned-aligned.apk
+          "$bt/zipalign" -c 4 signing-input/gaz-unsigned-aligned.apk
+          cp "$bt/lib/apksigner.jar" signing-input/apksigner.jar
+          (cd signing-input && sha256sum gaz-unsigned-aligned.apk apksigner.jar > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gaz-Distribution-0.2.3-offline-signing-input
+          path: signing-input/
           if-no-files-found: error
