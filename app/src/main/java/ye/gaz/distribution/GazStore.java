@@ -26,7 +26,7 @@ final class GazStore extends SQLiteOpenHelper {
     private final SecretKey secret;
     private final SecureRandom rng=new SecureRandom();
     GazStore(Context c) throws Exception {
-        super(c,"gaz-encrypted-records.db",null,1);
+        super(c,"gaz-encrypted-records.db",null,2);
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
         if(!ks.containsAlias(KEY)){
             if(c.getDatabasePath("gaz-encrypted-records.db").exists())throw new IllegalStateException("Encryption key missing");
@@ -40,8 +40,37 @@ final class GazStore extends SQLiteOpenHelper {
     }
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE records(kind TEXT NOT NULL, rid TEXT NOT NULL, encrypted BLOB NOT NULL, modified INTEGER NOT NULL, PRIMARY KEY(kind,rid))");
+        createPairTable(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db,int old,int now){throw new IllegalStateException("Migration required");}
+    private static void createPairTable(SQLiteDatabase db){db.execSQL("CREATE TABLE IF NOT EXISTS pairing(singleton INTEGER PRIMARY KEY CHECK(singleton=1), encrypted BLOB NOT NULL)");}
+    @Override public void onUpgrade(SQLiteDatabase db,int old,int now){if(old==1&&now==2){createPairTable(db);return;}throw new IllegalStateException("Migration required");}
+    synchronized JSONObject pairRead()throws Exception{
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT encrypted FROM pairing WHERE singleton=1",null)){
+            if(c.moveToFirst())return new JSONObject(open("gaz-pairing/v1",c.getBlob(0)));
+            return new JSONObject().put("role","independent");
+        }
+    }
+    synchronized String role()throws Exception{return pairRead().getString("role");}
+    synchronized void pairWrite(JSONObject state)throws Exception{
+        String old=role(),next=state.getString("role");
+        boolean allowed=old.equals(next)||(old.equals("independent")&&(next.equals("mother")||next.equals("pending")))||(old.equals("pending")&&(next.equals("independent")||next.equals("distributor")));
+        if(!allowed)throw new IllegalStateException("Invalid pair transition");
+        if(old.equals("independent")&&next.equals("pending")){JSONObject local=new JSONObject(readState());for(String k:new String[]{"families","cycles","deliveries"})if(local.getJSONArray(k).length()!=0)throw new IllegalStateException("Nonempty distributor");}
+        if(old.equals("independent")&&next.equals("mother")){JSONObject local=new JSONObject(readState());if(!local.getString("deploymentId").equals(state.getString("deployment"))||!local.getString("area").equals(state.getString("area")))throw new IllegalStateException("Local state changed");}
+        ContentValues v=new ContentValues();v.put("singleton",1);v.put("encrypted",seal("gaz-pairing/v1",state.toString()));
+        if(getWritableDatabase().insertWithOnConflict("pairing",null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("Pair write failed");
+    }
+    synchronized void writeLocalState(String json)throws Exception{
+        JSONObject state=pairRead();String role=state.getString("role");
+        if(role.equals("pending")||role.equals("distributor"))throw new IllegalStateException("Distributor data is not provisioned");
+        if(role.equals("mother")){JSONObject next=new JSONObject(json);if(!state.getString("deployment").equals(next.getString("deploymentId"))||!state.getString("area").equals(next.getString("area")))throw new IllegalStateException("Mother neighborhood locked");}
+        writeState(json);
+    }
+    synchronized void restoreIndependent(String json)throws Exception{if(!role().equals("independent"))throw new IllegalStateException("Pair recovery not implemented");writeState(json);}
+    synchronized boolean admin(String id)throws Exception{
+        String raw=readState();if("null".equals(raw))return false;JSONArray users=new JSONObject(raw).getJSONArray("users");
+        for(int i=0;i<users.length();i++){JSONObject u=users.getJSONObject(i);if(id.equals(u.getString("id")))return u.getJSONObject("permissions").optBoolean("admin");}return false;
+    }
     private static byte[] utf(String s){return s.getBytes(StandardCharsets.UTF_8);}
     private byte[] seal(String key,String value) throws Exception {
         Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,secret);c.updateAAD(utf(key));byte[] iv=c.getIV(),body=c.doFinal(utf(value));

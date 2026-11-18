@@ -34,7 +34,7 @@ jobs:
           test -f "$sdk/platforms/android-34/android.jar"
           echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
       - name: Verify APK and compare previous test signature
         id: signer
         shell: bash
@@ -46,10 +46,10 @@ jobs:
           "$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
           aapt="$ANDROID_HOME/build-tools/34.0.0/aapt"
           "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > apk-badging.txt
-          grep -F "versionName='0.2.1'" apk-badging.txt
+          grep -F "versionName='0.2.2'" apk-badging.txt
           grep -E 'application-icon|icon=' apk-badging.txt
-          gh release download v0.2.0-test --pattern Gaz-Distribution-0.2.0-test.apk --dir previous-apk
-          old=$("$apksigner" verify --print-certs previous-apk/Gaz-Distribution-0.2.0-test.apk | grep 'certificate SHA-256 digest:' | sort)
+          gh release download v0.2.1-test --pattern Gaz-Distribution-0.2.1-test.apk --dir previous-apk
+          old=$("$apksigner" verify --print-certs previous-apk/Gaz-Distribution-0.2.1-test.apk | grep 'certificate SHA-256 digest:' | sort)
           new=$("$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep 'certificate SHA-256 digest:' | sort)
           if [ -n "$old" ] && [ "$old" = "$new" ]; then
             echo "same_signer=true" >> "$GITHUB_OUTPUT"
@@ -59,34 +59,6 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Gaz-Distribution-0.2.1-test
+          name: Gaz-Distribution-0.2.2-test
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-  publish-test:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: apk
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      SAME_SIGNER: ${{ needs.apk.outputs.same_signer }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Gaz-Distribution-0.2.1-test
-          path: apk
-      - name: Publish immutable test release
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp apk/app-debug.apk Gaz-Distribution-0.2.1-test.apk
-          tag=v0.2.1-test
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Test release already exists; not overwriting."
-            exit 0
-          fi
-          printf '%s\n' 'أيقونة التطبيق المعتمدة: أسطوانة الغاز والشعلة والهلال البرتقالي، بدون كتابة.' 'نسخة تجريبية لجهاز واحد، لا مزامنة بعد.' "Same signer as 0.2.0: $SAME_SIGNER" 'إذا اختلف التوقيع، لا تحذف الإصدار السابق قبل حفظ بياناتك والتحقق من قابلية الاستعادة. لا تستخدم بيانات حقيقية.' > notes.txt
-          gh release create "$tag" Gaz-Distribution-0.2.1-test.apk --target "$GITHUB_SHA" --title "Gaz Distribution 0.2.1 — Android test" --notes-file notes.txt --prerelease

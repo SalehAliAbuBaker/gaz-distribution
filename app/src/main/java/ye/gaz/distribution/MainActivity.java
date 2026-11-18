@@ -16,6 +16,14 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.*;
 import android.util.Base64;
+import org.json.*;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
+import com.google.zxing.qrcode.QRCodeWriter;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.common.BitMatrix;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 
 public final class MainActivity extends Activity {
     private static final String HOME="https://appassets.androidplatform.net/assets/index.html";
@@ -25,11 +33,15 @@ public final class MainActivity extends Activity {
     private File pending;
     private final ExecutorService workers=Executors.newSingleThreadExecutor();
     private String device;
+    private GazPairing pairing;
+    private String scanMode, scanAdmin;
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
         try{store=new GazStore(this);store.readState();}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر فتح البيانات").setMessage("لم تُحذف بياناتك. راجع الدعم الفني.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
         android.content.SharedPreferences prefs=getSharedPreferences("identity",MODE_PRIVATE);
         device=prefs.getString("id",null);if(device==null){device=UUID.randomUUID().toString();prefs.edit().putString("id",device).commit();}
+        try{pairing=new GazPairing(store,device);}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر التحقق من هوية الجهاز").setMessage("بياناتك محفوظة. لا تحذف التطبيق.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
+        if(saved!=null){scanMode=saved.getString("scanMode");scanAdmin=saved.getString("scanAdmin");}
         cleanCache();
         if(saved!=null){String path=saved.getString("pending");if(path!=null){File f=new File(path);if(f.isFile()&&f.getParentFile().equals(outDir()))pending=f;}}
         web=new WebView(this);
@@ -49,14 +61,85 @@ public final class MainActivity extends Activity {
     }
     private final class Bridge {
         @JavascriptInterface public String readState(){try{return store.readState();}catch(Exception e){return "";}}
-        @JavascriptInterface public boolean writeState(String json){try{store.writeState(json);return true;}catch(Exception e){return false;}}
+        @JavascriptInterface public boolean writeState(String json){try{store.writeLocalState(json);return true;}catch(Exception e){return false;}}
         @JavascriptInterface public String deviceId(){return device;}
+        @JavascriptInterface public String deviceRole(){try{return store.role();}catch(Exception e){return "locked";}}
+        @JavascriptInterface public void manageDevices(String admin){runOnUiThread(()->manageDevicesScreen(admin));}
         @JavascriptInterface public void backup(){runOnUiThread(()->askPass(true,null));}
-        @JavascriptInterface public void restore(){runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,RESTORE);});}
+        @JavascriptInterface public void restore(){runOnUiThread(()->{try{if(!store.role().equals("independent")){msg("الاستعادة بعد الاقتران تحتاج آلية استرداد السلطة؛ غير متاحة الآن");return;}}catch(Exception e){msg("تعذر التحقق من حالة الربط");return;}Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,RESTORE);});}
         @JavascriptInterface public void shareText(String text){runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
         @JavascriptInterface public void exportDocument(String name,String mime,String b64){document(name,mime,b64,0);}
         @JavascriptInterface public void shareDocument(String name,String mime,String b64){document(name,mime,b64,1);}
         @JavascriptInterface public void printDocument(String name,String b64){document(name,"application/pdf",b64,2);}
+    }
+    private boolean adminAllowed(String admin){
+        try{if(admin!=null&&store.admin(admin))return true;}catch(Exception ignored){}
+        msg("يلزم حساب مدير الجهاز");return false;
+    }
+    private void notifyPairChange(){if(web!=null)web.evaluateJavascript("window.location.reload()",null);}
+    private LinearLayout pairLayout(){LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);int d=(int)(18*getResources().getDisplayMetrics().density);v.setPadding(d,d,d,d);return v;}
+    private void pairText(LinearLayout p,String text){TextView t=new TextView(this);t.setText(text);t.setTextSize(15);t.setPadding(0,8,0,12);p.addView(t);}
+    private void pairButton(LinearLayout p,String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);p.addView(b);b.setOnClickListener(v->action.run());}
+    private void manageDevicesScreen(String admin){
+        if(!adminAllowed(admin))return;
+        try{
+            JSONObject s=pairing.status();String role=s.optString("role","independent");
+            LinearLayout p=pairLayout();pairText(p,"معرّف بصمة الجهاز: "+pairing.fingerprint());
+            pairText(p,"اختبار الاقتران فقط — لا مزامنة بيانات أو توزيع من الجوال الفرعي بعد.");
+            ScrollView scroll=new ScrollView(this);scroll.addView(p);
+            AlertDialog d=new AlertDialog.Builder(this).setTitle("إدارة الجوالات").setView(scroll).setPositiveButton("إغلاق",null).create();
+            if(role.equals("independent")){
+                pairText(p,"هذا الجهاز مستقل الآن.");
+                pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف مالك هوية الحارة؛ نقل السلطة والاستعادة على جهاز مقترن غير متاحين بعد. للتجربة ببيانات وهمية فقط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من حفظ اسم الحارة ووجود حساب مدير");}}).show());
+                pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر والدورات والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
+            }else if(role.equals("pending")){
+                pairText(p,"بانتظار موافقة الجوال الأم.");
+                pairButton(p,"عرض طلب الربط QR",()->{try{showQr("طلب ربط الموزع",s.getString("request"),pairing.fingerprint(),"امسح الطلب بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر عرض الرمز");}});
+                pairButton(p,"مسح رمز موافقة الجوال الأم",()->{d.dismiss();scanQr("approval",admin);});
+                pairButton(p,"إلغاء الطلب المعلق",()->new AlertDialog.Builder(this).setTitle("إلغاء الطلب؟").setMessage("إذا سبق للجوال الأم اعتماد الطلب فسيظل تسجيله هناك. لا توجد تخصيصات في هذا الإصدار.").setNegativeButton("رجوع",null).setPositiveButton("إلغاء الطلب",(x,y)->{try{if(!adminAllowed(admin))return;pairing.cancelPending();d.dismiss();notifyPairChange();}catch(Exception e){msg("تعذر الإلغاء");}}).show());
+            }else if(role.equals("mother")){
+                pairText(p,"الجوال الأم — "+s.getString("area"));
+                pairButton(p,"مسح طلب ربط موزع جديد",()->{d.dismiss();scanQr("request",admin);});
+                JSONObject devices=s.getJSONObject("devices");
+                pairText(p,"الأجهزة المسجلة: "+devices.length()+" (لم تختبر المزامنة)");
+                for(java.util.Iterator<String> it=devices.keys();it.hasNext();){
+                    JSONObject child=devices.getJSONObject(it.next());
+                    pairText(p,child.getString("name")+" | "+PairPackets.shortFingerprint(child.getString("pub")));
+                    String approval=child.getString("approval");pairButton(p,"عرض رمز الموافقة مجددًا",()->{try{showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح الرمز من جوال الموزع وقارن بصمة الأم.");}catch(Exception e){msg("تعذر عرض الرمز");}});
+                }
+            }else if(role.equals("distributor")){
+                pairText(p,"موزع مقترن بحارة: "+s.getString("area"));
+                pairText(p,"بصمة الجوال الأم: "+PairPackets.shortFingerprint(s.getString("motherPub")));
+                pairText(p,"في انتظار مرحلة تخصيص الأسر والمزامنة. الصرف مقفل.");
+            }
+            d.show();
+        }catch(Exception e){msg("تعذر فتح إدارة الجوالات؛ لم يتم تغيير بياناتك");}
+    }
+    private void scanQr(String mode,String admin){
+        if(!adminAllowed(admin))return;
+        scanMode=mode;scanAdmin=admin;
+        new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE).setPrompt("وجّه الكاميرا إلى رمز الاقتران").setBeepEnabled(false).setOrientationLocked(false).initiateScan();
+    }
+    private void handlePairScan(String mode,String admin,String packet){
+        if(!adminAllowed(admin))return;
+        try{
+            if(mode.equals("request")){
+                JSONObject r=PairPackets.unpack(packet,"request");String fp=PairPackets.shortFingerprint(r.getString("pub"));
+                new AlertDialog.Builder(this).setTitle("قبول الموزع؟").setMessage("الاسم: "+r.getString("name")+"\nالبصمة: "+fp+"\nقارن البصمة بالتي تظهر على جوال الموزع نفسه. لا توافق إن اختلفت.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;String approval=pairing.approve(packet);notifyPairChange();showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح هذا الرمز من جهاز الموزع وقارن بصمة الأم.");}catch(Exception e){msg("رفض الطلب؛ تعارض أو جهاز مسجل سابقًا");}}).show();
+            }else if(mode.equals("approval")){
+                JSONObject r=pairing.inspectApproval(packet);String fp=PairPackets.shortFingerprint(r.getString("pub"));
+                new AlertDialog.Builder(this).setTitle("تأكيد الجوال الأم").setMessage("الحارة: "+r.getString("area")+"\nبصمة الأم: "+fp+"\nقارنها بالبصمة المعروضة على الجوال الأم.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;pairing.accept(packet);notifyPairChange();msg("تم اعتماد هوية الجوال الأم؛ الصرف مقفل حتى التخصيص");}catch(Exception e){msg("تعذر اعتماد الموافقة");}}).show();
+            }
+        }catch(Exception e){msg("الرمز غير صالح أو لا يخص هذا الجهاز");}
+    }
+    private void showQr(String title,String packet,String fp,String desc)throws Exception{
+        BitMatrix bits=new QRCodeWriter().encode(packet,BarcodeFormat.QR_CODE,720,720);int[] pixels=new int[720*720];
+        for(int y=0;y<720;y++)for(int x=0;x<720;x++)pixels[y*720+x]=bits.get(x,y)?Color.BLACK:Color.WHITE;
+        Bitmap bitmap=Bitmap.createBitmap(pixels,720,720,Bitmap.Config.ARGB_8888);
+        LinearLayout p=pairLayout();pairText(p,desc);pairText(p,"البصمة: "+fp);
+        ImageView image=new ImageView(this);image.setImageBitmap(bitmap);image.setAdjustViewBounds(true);p.addView(image,new LinearLayout.LayoutParams(-1,-2));
+        ScrollView scroll=new ScrollView(this);scroll.addView(p);
+        new AlertDialog.Builder(this).setTitle(title).setView(scroll).setPositiveButton("إغلاق",null).show();
     }
     private void document(String name,String mime,String encoded,int action){
         workers.execute(()->{try{
@@ -101,18 +184,20 @@ public final class MainActivity extends Activity {
             workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("gaz_backup_"+System.currentTimeMillis(),".gazbak",encrypted);runOnUiThread(()->savePicker(f,"application/octet-stream"));}else{
                 byte[] bytes;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();bytes=readLimited(in);}
                 String json=GazStore.decodeBackup(bytes,pass);
-                runOnUiThread(()->new AlertDialog.Builder(this).setTitle("استبدال البيانات المحلية؟").setMessage("النسخة صحيحة. ستستبدل جميع البيانات والحسابات على هذا الجهاز. يوصى بحفظ نسخة احتياطية أولًا.").setNegativeButton("إلغاء",null).setPositiveButton("استعادة",(d,b)->workers.execute(()->{try{store.writeState(json);runOnUiThread(()->web.evaluateJavascript("window.dispatchEvent(new Event('gaz-restore-complete'))",null));msg("تمت الاستعادة");}catch(Exception e){msg("فشلت الاستعادة؛ لم تُعتمد بيانات جديدة");}})).show());
+                runOnUiThread(()->new AlertDialog.Builder(this).setTitle("استبدال البيانات المحلية؟").setMessage("النسخة صحيحة. ستستبدل جميع البيانات والحسابات على هذا الجهاز. يوصى بحفظ نسخة احتياطية أولًا.").setNegativeButton("إلغاء",null).setPositiveButton("استعادة",(d,b)->workers.execute(()->{try{store.restoreIndependent(json);runOnUiThread(()->web.evaluateJavascript("window.dispatchEvent(new Event('gaz-restore-complete'))",null));msg("تمت الاستعادة");}catch(Exception e){msg("فشلت الاستعادة؛ لم تُعتمد بيانات جديدة");}})).show());
             }}catch(Exception e){msg(backup?"تعذر إنشاء النسخة الاحتياطية":"تعذر فتح النسخة؛ تحقق من الملف وكلمة المرور");}finally{Arrays.fill(pass,'\0');}});
         }));dialog.show();
     }
     private static byte[] readLimited(InputStream in)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1){if(out.size()+n>GazStore.MAX)throw new IOException("Too large");out.write(b,0,n);}return out.toByteArray();}
     @Override protected void onActivityResult(int req,int result,Intent data){
+        IntentResult scan=IntentIntegrator.parseActivityResult(req,result,data);
+        if(scan!=null){String mode=scanMode,admin=scanAdmin;scanMode=null;scanAdmin=null;if(scan.getContents()!=null&&mode!=null&&admin!=null)handlePairScan(mode,admin,scan.getContents());return;}
         super.onActivityResult(req,result,data);
         if(req==SAVE){File f=pending;pending=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&f!=null){
             Uri uri=data.getData();workers.execute(()->{try(InputStream in=new FileInputStream(f);OutputStream out=getContentResolver().openOutputStream(uri,"w")){if(out==null)throw new IOException();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1)out.write(b,0,n);out.flush();msg("تم حفظ الملف");}catch(Exception e){msg("تعذر حفظ الملف");}});
         }}else if(req==RESTORE&&result==RESULT_OK&&data!=null&&data.getData()!=null)askPass(false,data.getData());
     }
-    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());}
+    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());b.putString("scanMode",scanMode);b.putString("scanAdmin",scanAdmin);}
     private void msg(String s){runOnUiThread(()->Toast.makeText(this,s,Toast.LENGTH_LONG).show());}
     @Override public void onBackPressed(){if(web!=null){web.evaluateJavascript("(function(){let p=document.getElementById('gazPreview');if(p&&!p.hidden){document.getElementById('gazPreviewClose').click();return;}if(typeof activeUser!=='undefined'&&activeUser&&current!=='home'){show('home');return;}alert('للخروج استخدم شاشة التطبيقات أو تسجيل الخروج.');})()",null);}else super.onBackPressed();}
     @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}workers.shutdown();super.onDestroy();}
