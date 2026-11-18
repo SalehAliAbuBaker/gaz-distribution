@@ -44,12 +44,14 @@ final class GazPairing {
             for(java.util.Iterator<String> it=g.keys();it.hasNext();){
                 String k=it.next();JSONObject p=SyncWire.peek(g.getString(k));
                 JSONObject row=new JSONObject(p.toString()).put("key",k).put("done",mother?receipts.has(k):out.has(k)).put("synced",mother?receipts.has(k):acked.optBoolean(k));
-                if(mother)row.put("distributorName",SyncRules.child(s,p.getString("device")).getString("name"));rows.put(row);
+                if(mother)row.put("distributorName",SyncRules.child(s,p.getString("device")).getString("name"));
+                JSONObject moves=mother?receipts:out;if(moves.has(k)){JSONObject receipt=SyncWire.peek(moves.getString(k));row.put("q",receipt.getInt("q")).put("at",receipt.getString("at")).put("operator",receipt.optString("operator",""));}
+                rows.put(row);
             }return rows;
         }
     }
-    void record(String key,int quantity)throws Exception{
-        synchronized(store){JSONObject state=status();SyncRules.record(state,key,quantity,secret);store.commitSync(state,null);}
+    void record(String key,int quantity,String operatorId,String operator)throws Exception{
+        synchronized(store){JSONObject state=status();SyncRules.record(state,key,quantity,secret,operatorId,operator);store.commitSync(state,null);}
     }
     GazLan listen(String ip)throws Exception{
         PairPackets.require("mother".equals(status().getString("role")),"Mother required");return new GazLan(ip,secret);

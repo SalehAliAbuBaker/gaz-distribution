@@ -36,6 +36,8 @@ public final class MainActivity extends Activity {
     private GazPairing pairing;
     private String scanMode, scanAdmin;
     private GazLan lan;
+    private volatile String distributorSessionId;
+    private long lastLoginAttempt;
     private final ExecutorService network=Executors.newSingleThreadExecutor();
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
@@ -62,21 +64,37 @@ public final class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(),"GazNative");setContentView(web);web.loadUrl(HOME);
     }
     private final class Bridge {
-        @JavascriptInterface public String readState(){try{return store.readState();}catch(Exception e){return "";}}
+        @JavascriptInterface public String readState(){try{return isDistributor()?store.distributorWebState():store.readState();}catch(Exception e){return "";}}
         @JavascriptInterface public boolean writeState(String json){try{store.writeLocalState(json);return true;}catch(Exception e){return false;}}
         @JavascriptInterface public String deviceId(){return device;}
         @JavascriptInterface public String deviceRole(){try{return store.role();}catch(Exception e){return "locked";}}
         @JavascriptInterface public void manageDevices(String admin){runOnUiThread(()->manageDevicesScreen(admin));}
-        @JavascriptInterface public String allocatedRows(){try{return pairing.allocations().toString();}catch(Exception e){return "";} }
+        @JavascriptInterface public String allocatedRows(){try{return isDistributor()?"[]":pairing.allocations().toString();}catch(Exception e){return "";} }
         @JavascriptInterface public void allocatedDistribution(String admin){runOnUiThread(()->distributorScreen(admin));}
-        @JavascriptInterface public void backup(){runOnUiThread(()->askPass(true,null));}
+        @JavascriptInterface public synchronized String distributorLogin(String username,String password){
+            try{if(!isDistributor())return "";long now=android.os.SystemClock.elapsedRealtime();if(now-lastLoginAttempt<700&&lastLoginAttempt!=0)return "";lastLoginAttempt=now;
+                JSONObject u=DistributorUsers.login(store.distributorUsers(),username,password);if(u==null)return "";distributorSessionId=u.getString("id");return DistributorUsers.publicUser(u).toString();
+            }catch(Exception e){return "";}
+        }
+        @JavascriptInterface public String distributorSession(){try{JSONObject u=sessionUser();return u==null?"":DistributorUsers.publicUser(u).toString();}catch(Exception e){return "";}}
+        @JavascriptInterface public void distributorLogout(){if(isDistributor())distributorSessionId=null;}
+        @JavascriptInterface public void distributorAction(String action){runOnUiThread(()->openDistributorAction(action));}
+        @JavascriptInterface public void backup(){if(!isDistributor())runOnUiThread(()->askPass(true,null));}
         @JavascriptInterface public void restore(){runOnUiThread(()->{try{if(!store.role().equals("independent")){msg("الاستعادة بعد الاقتران تحتاج آلية استرداد السلطة؛ غير متاحة الآن");return;}}catch(Exception e){msg("تعذر التحقق من حالة الربط");return;}Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,RESTORE);});}
-        @JavascriptInterface public void shareText(String text){runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
-        @JavascriptInterface public void exportDocument(String name,String mime,String b64){document(name,mime,b64,0);}
-        @JavascriptInterface public void shareDocument(String name,String mime,String b64){document(name,mime,b64,1);}
-        @JavascriptInterface public void printDocument(String name,String b64){document(name,"application/pdf",b64,2);}
+        @JavascriptInterface public void shareText(String text){if(isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
+        @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,0);}
+        @JavascriptInterface public void shareDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,1);}
+        @JavascriptInterface public void printDocument(String name,String b64){if(isDistributor())return;document(name,"application/pdf",b64,2);}
     }
+    private boolean isDistributor(){try{return "distributor".equals(store.role());}catch(Exception e){return false;}}
+    private JSONObject sessionUser()throws Exception{String id=distributorSessionId;return id==null||!isDistributor()?null:DistributorUsers.find(store.distributorUsers(),id);}
+    private boolean distributorAllowed(String permission){
+        try{if(DistributorUsers.allowed(sessionUser(),permission))return true;}catch(Exception ignored){}
+        msg("لا توجد صلاحية لتنفيذ هذا الإجراء");return false;
+    }
+    private boolean syncAllowed(String id){return isDistributor()?distributorAllowed("sync"):adminAllowed(id);}
     private boolean adminAllowed(String admin){
+        if(isDistributor())return distributorAllowed("admin");
         try{if(admin!=null&&store.admin(admin))return true;}catch(Exception ignored){}
         msg("يلزم حساب مدير الجهاز");return false;
     }
@@ -163,8 +181,84 @@ public final class MainActivity extends Activity {
             ScrollView sc=new ScrollView(this);sc.addView(p);new AlertDialog.Builder(this).setTitle("حالة التخصيصات").setView(sc).setPositiveButton("إغلاق",null).show();
         }catch(Exception e){msg("تعذر عرض التخصيصات");}
     }
+    private void openDistributorAction(String action){
+        try{JSONObject user=sessionUser();if(user==null){msg("سجل الدخول أولًا");return;}String id=user.getString("id");
+            switch(action){
+                case "view":if(distributorAllowed("view"))readDistributorRows(false);break;
+                case "deliver":distributorScreen(id);break;
+                case "history":if(distributorAllowed("history"))readDistributorRows(true);break;
+                case "reports":if(distributorAllowed("reports"))distributorReports();break;
+                case "sync":if(distributorAllowed("sync"))scanQr("sync",id);break;
+                case "settings":distributorSettings();break;
+                default:msg("الإجراء غير متاح");
+            }
+        }catch(Exception e){msg("تعذر فتح الشاشة");}
+    }
+    private String deliveryDescription(JSONObject r){
+        if(!r.optBoolean("done"))return "لم يستلم";
+        String at=r.optString("at","").replace('T',' ').replace("Z","");
+        if(at.length()>16)at=at.substring(0,16);
+        String op=r.optString("operator","");
+        return "تم التسليم: "+r.optInt("q")+" | "+(r.optBoolean("synced")?"تمت المزامنة":"بانتظار المزامنة")+(at.isEmpty()?"":"\n"+at)+(op.isEmpty()?"":" | "+op);
+    }
+    private void readDistributorRows(boolean history){
+        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو المنزل أو الدورة");p.addView(search);
+            LinearLayout list=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(list);p.addView(scroll,new LinearLayout.LayoutParams(-1,(int)(380*getResources().getDisplayMetrics().density)));
+            Runnable draw=()->{list.removeAllViews();int count=0;String query=DistributorUsers.normalize(search.getText().toString());for(int i=0;i<all.length();i++){JSONObject r=all.optJSONObject(i);if(r==null||(history&&!r.optBoolean("done")))continue;
+                String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | "+r.optString("cycleTitle");if(!DistributorUsers.normalize(label).contains(query))continue;count++;pairText(list,label+"\n"+deliveryDescription(r));}
+                if(count==0)pairText(list,history?"لا توجد حركات تسليم مطابقة":"لا توجد أسر مطابقة");};
+            search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});draw.run();
+            new AlertDialog.Builder(this).setTitle(history?"سجل التسليم":"الأسر المخصصة").setView(p).setPositiveButton("إغلاق",null).show();
+        }catch(Exception e){msg("تعذر قراءة السجل");}
+    }
+    private void distributorReports(){
+        try{JSONArray all=pairing.allocations();java.util.LinkedHashMap<String,int[]> sums=new java.util.LinkedHashMap<>();java.util.LinkedHashMap<String,String> labels=new java.util.LinkedHashMap<>();
+            for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);String cycle=r.getString("cycle");labels.put(cycle,r.getString("cycleTitle")+" · "+r.optString("cycleDate"));int[] n=sums.get(cycle);if(n==null){n=new int[5];sums.put(cycle,n);}n[0]++;if(r.optBoolean("done")){n[1]++;n[2]+=r.optInt("q");if(!r.optBoolean("synced"))n[3]++;}else n[4]++;}
+            StringBuilder out=new StringBuilder("كشف توزيع الغاز — "+pairing.status().getString("area"));
+            for(String cycle:sums.keySet()){int[] n=sums.get(cycle);out.append("\n\n").append(labels.get(cycle)).append("\nالأسر المخصصة: ").append(n[0]).append(" | المستلمة: ").append(n[1]).append(" | المتبقية: ").append(n[4]).append("\nالأسطوانات المسلمة: ").append(n[2]).append(" | حركات بانتظار المزامنة: ").append(n[3]);}
+            if(sums.isEmpty())out.append("\nلا توجد تخصيصات");final String text=out.toString();
+            ScrollView sc=new ScrollView(this);LinearLayout p=pairLayout();pairText(p,text);sc.addView(p);
+            AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle("الكشوف والتقارير").setView(sc).setPositiveButton("إغلاق",null);
+            if(DistributorUsers.allowed(sessionUser(),"share"))d.setNeutralButton("مشاركة الكشف",(v,w)->{if(!distributorAllowed("share")||!distributorAllowed("reports"))return;Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});d.show();
+        }catch(Exception e){msg("تعذر إعداد التقرير");}
+    }
+    private void distributorSettings(){
+        try{JSONObject user=sessionUser();if(user==null)return;
+            JSONObject s=pairing.status();LinearLayout p=pairLayout();pairText(p,"الحارة: "+s.getString("area")+"\nالمستخدم: "+user.getString("username")+"\n"+(s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد"));
+            pairText(p,"بصمة الجوال الأم: "+PairPackets.shortFingerprint(s.getString("motherPub")));
+            AlertDialog d=new AlertDialog.Builder(this).setTitle("إعدادات الموزع").setView(p).setPositiveButton("إغلاق",null).create();
+            if(DistributorUsers.allowed(user,"admin"))pairButton(p,"المستخدمون والصلاحيات",()->{d.dismiss();distributorUserList();});
+            if(DistributorUsers.allowed(user,"sync"))pairButton(p,"المزامنة بعنوان IP (احتياطي)",()->{d.dismiss();connectLan(user.optString("id"));});
+            pairText(p,"إدارة التخصيص والاستعادة ونقل السلطة من الجوال الأم غير متاحة للموزع.");
+            d.show();
+        }catch(Exception e){msg("تعذر فتح الإعدادات");}
+    }
+    private void distributorUserList(){
+        if(!distributorAllowed("admin"))return;
+        try{JSONArray list=store.distributorUsers();LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.addView(p);
+            AlertDialog d=new AlertDialog.Builder(this).setTitle("المستخدمون والصلاحيات").setView(sc).setPositiveButton("إغلاق",null).create();
+            pairButton(p,"إضافة مستخدم جديد",()->{d.dismiss();editDistributorUser(null);});
+            for(int i=0;i<list.length();i++){JSONObject u=list.getJSONObject(i);String id=u.getString("id");StringBuilder perms=new StringBuilder();
+                for(int j=0;j<DistributorUsers.PERMS.length;j++){if(DistributorUsers.allowed(u,DistributorUsers.PERMS[j])){if(perms.length()>0)perms.append("، ");perms.append(DistributorUsers.LABELS[j]);}}
+                pairText(p,u.getString("username")+"\n"+(perms.length()==0?"بدون صلاحيات":perms.toString()));
+                pairButton(p,"تعديل الحساب",()->{d.dismiss();editDistributorUser(u);});
+                if(!id.equals(distributorSessionId))pairButton(p,"حذف الحساب",()->new AlertDialog.Builder(this).setTitle("حذف المستخدم؟").setMessage("تبقى حركات التسليم السابقة محفوظة باسم منفذها.").setNegativeButton("إلغاء",null).setPositiveButton("حذف",(v,w)->{try{if(!distributorAllowed("admin"))return;store.removeDistributorUser(distributorSessionId,id);d.dismiss();distributorUserList();}catch(Exception e){msg("تعذر حذف الحساب");}}).show());
+            }d.show();
+        }catch(Exception e){msg("تعذر عرض المستخدمين");}
+    }
+    private void editDistributorUser(JSONObject old){
+        if(!distributorAllowed("admin"))return;
+        LinearLayout p=pairLayout();EditText name=new EditText(this),password=new EditText(this);name.setSingleLine(true);name.setHint("اسم المستخدم");password.setHint(old==null?"رمز المرور (6 أحرف على الأقل)":"رمز مرور جديد (اختياري)");password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        if(old!=null)name.setText(old.optString("username"));p.addView(name);p.addView(password);pairText(p,"صلاحيات المستخدم على هذا الجوال فقط");
+        CheckBox[] checks=new CheckBox[DistributorUsers.PERMS.length];
+        for(int i=0;i<checks.length;i++){checks[i]=new CheckBox(this);checks[i].setText(DistributorUsers.LABELS[i]);checks[i].setChecked(old==null?"view".equals(DistributorUsers.PERMS[i]):old.optJSONObject("permissions").optBoolean(DistributorUsers.PERMS[i]));p.addView(checks[i]);}
+        ScrollView sc=new ScrollView(this);sc.addView(p);AlertDialog d=new AlertDialog.Builder(this).setTitle(old==null?"إضافة مستخدم":"تعديل المستخدم").setView(sc).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",null).create();
+        d.setOnShowListener(v->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{if(!distributorAllowed("admin"))return;try{
+            JSONObject perms=new JSONObject();for(int i=0;i<checks.length;i++)perms.put(DistributorUsers.PERMS[i],checks[i].isChecked());store.saveDistributorUser(distributorSessionId,old==null?null:old.getString("id"),name.getText().toString(),password.getText().toString(),perms);d.dismiss();notifyPairChange();distributorUserList();msg("تم حفظ المستخدم وصلاحياته");
+            }catch(Exception e){msg("تعذر الحفظ؛ تحقق من الاسم ورمز المرور والصلاحيات");}}));d.show();
+    }
     private void distributorScreen(String admin){
-        if(!adminAllowed(admin))return;
+        if(!distributorAllowed("deliver"))return;
         try{
             PairPackets.require("distributor".equals(store.role()),"Distributor required");JSONArray rows=pairing.allocations();
             LinearLayout p=pairLayout();pairText(p,"الأسر المخصصة: "+rows.length());
@@ -179,9 +273,9 @@ public final class MainActivity extends Activity {
         }catch(Exception e){msg("تعذر فتح الأسر المخصصة");}
     }
     private void recordDelivery(String admin,JSONObject row){
-        if(!adminAllowed(admin))return;
+        if(!distributorAllowed("deliver"))return;
         EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+row.optInt("maxQty"));
-        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" أسطوانة. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!adminAllowed(admin))return;int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n);msg("تم حفظ التسليم محليًا");distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
+        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" أسطوانة. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
     }
     private void chooseLan(String admin){
         if(!adminAllowed(admin))return;
@@ -208,26 +302,26 @@ public final class MainActivity extends Activity {
     }
     private void closeLan(){GazLan s=lan;lan=null;if(s!=null)s.close();}
     private void connectLan(String admin){
-        if(!adminAllowed(admin))return;
+        if(!syncAllowed(admin))return;
         EditText ip=new EditText(this);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_TEXT);ip.setHint("192.168.x.x");
         new AlertDialog.Builder(this).setTitle("المزامنة مع الجوال الأم").setMessage("أدخل عنوان Wi-Fi المعروض على شاشة مزامنة الأم.").setView(ip).setNegativeButton("إلغاء",null).setPositiveButton("مزامنة",(d,w)->{
             syncAddress(admin,ip.getText().toString().trim());
         }).show();
     }
     private void syncAddress(String admin,String ip){
-        if(!adminAllowed(admin))return;
+        if(!syncAllowed(admin))return;
         ProgressDialog busy=ProgressDialog.show(this,"المزامنة","جارٍ التحقق وتبادل البيانات…",true,false);
         network.execute(()->{try{pairing.synchronize(this,ip);runOnUiThread(()->{busy.dismiss();notifyPairChange();msg("تمت المزامنة بنجاح");});}
             catch(Exception e){runOnUiThread(()->{busy.dismiss();new AlertDialog.Builder(this).setTitle("لم تكتمل المزامنة").setMessage(GazLan.diagnostic(e)+"\nحركاتك محفوظة. أرسل صورة هذه الرسالة عند تكرار المشكلة.").setPositiveButton("إغلاق",null).show();});}});
     }
     @Override protected void onPause(){closeLan();super.onPause();}
     private void scanQr(String mode,String admin){
-        if(!adminAllowed(admin))return;
+        if("sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
         scanMode=mode;scanAdmin=admin;
         new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE).setCaptureActivity(PortraitCaptureActivity.class).setPrompt("وجّه الكاميرا إلى رمز QR").setBeepEnabled(false).setOrientationLocked(true).initiateScan();
     }
     private void handlePairScan(String mode,String admin,String packet){
-        if(!adminAllowed(admin))return;
+        if("sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
         try{
             if(mode.equals("sync")){String ip=pairing.readSyncQr(packet);syncAddress(admin,ip);}
             else if(mode.equals("request")){

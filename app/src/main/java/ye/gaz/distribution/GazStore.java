@@ -72,6 +72,23 @@ final class GazStore extends SQLiteOpenHelper {
         }finally{db.endTransaction();}
     }
     synchronized void restoreIndependent(String json)throws Exception{if(!role().equals("independent"))throw new IllegalStateException("Pair recovery not implemented");writeState(json);}
+    synchronized JSONArray distributorUsers()throws Exception{
+        if(!"distributor".equals(role()))throw new SecurityException("Distributor required");
+        return new JSONObject(readState()).getJSONArray("users");
+    }
+    synchronized void saveDistributorUser(String actor,String id,String name,String password,JSONObject perms)throws Exception{
+        JSONArray next=DistributorUsers.save(distributorUsers(),actor,id,name,password,perms);
+        JSONObject local=new JSONObject(readState());local.put("users",next);writeState(local.toString());
+    }
+    synchronized void removeDistributorUser(String actor,String id)throws Exception{
+        JSONArray next=DistributorUsers.remove(distributorUsers(),actor,id);
+        JSONObject local=new JSONObject(readState());local.put("users",next);writeState(local.toString());
+    }
+    synchronized String distributorWebState()throws Exception{
+        JSONObject local=new JSONObject(readState());JSONArray safe=new JSONArray();
+        if(local.getJSONArray("users").length()>0)safe.put(new JSONObject().put("id","local").put("username","").put("permissions",new JSONObject()));
+        local.put("users",safe);return local.toString();
+    }
     synchronized boolean admin(String id)throws Exception{
         String raw=readState();if("null".equals(raw))return false;JSONArray users=new JSONObject(raw).getJSONArray("users");
         for(int i=0;i<users.length();i++){JSONObject u=users.getJSONObject(i);if(id.equals(u.getString("id")))return u.getJSONObject("permissions").optBoolean("admin");}return false;

@@ -38,11 +38,13 @@ final class SyncRules {
         JSONObject grants=map(s,"grants");String k=key(p.getString("cycle"),p.getString("family"));
         require(!grants.has(k)||packet.equals(grants.getString(k)),"Conflicting grant");grants.put(k,packet);
     }
-    static String record(JSONObject s,String k,int q,PrivateKey secret)throws Exception{
+    static String record(JSONObject s,String k,int q,PrivateKey secret)throws Exception{return record(s,k,q,secret,null,null);}
+    static String record(JSONObject s,String k,int q,PrivateKey secret,String operatorId,String operator)throws Exception{
         require("distributor".equals(s.getString("role")),"Distributor required");String device=s.getString("device");
         JSONObject p=grantPayload(s,map(s,"grants").getString(k),device);JSONObject out=map(s,"outbox");
         require(!out.has(k),"Already delivered");require(quantity(q)<=p.getInt("maxQty"),"Quantity exceeds grant");
         JSONObject receipt=base(s,"receipt",device).put("id",UUID.randomUUID().toString()).put("grant",p.getString("id")).put("cycle",p.getString("cycle")).put("family",p.getString("family")).put("q",q).put("at",Instant.now().toString());
+        if(operatorId!=null){PairPackets.uuid(operatorId);require(operator!=null&&!operator.trim().isEmpty()&&operator.length()<=120,"Invalid operator");receipt.put("operatorId",operatorId).put("operator",operator);}
         String packet=SyncWire.sign(receipt,secret);out.put(k,packet);return packet;
     }
     static void importReceipt(JSONObject s,JSONObject local,String device,String packet)throws Exception{
@@ -54,7 +56,9 @@ final class SyncRules {
         if(receipts.has(k)){require(packet.equals(receipts.getString(k)),"Conflicting receipt");return;}
         for(Iterator<String> it=receipts.keys();it.hasNext();){JSONObject old=SyncWire.peek(receipts.getString(it.next()));require(!old.getString("id").equals(p.getString("id")),"Receipt reused");}
         JSONObject c=find(local.getJSONArray("cycles"),cycle);require(c!=null&&!c.optBoolean("closed")&&find(local.getJSONArray("families"),family)!=null&&delivery(local,cycle,family)==null,"Local record conflict");
-        local.getJSONArray("deliveries").put(new JSONObject().put("c",cycle).put("f",family).put("q",q).put("at",p.getString("at")).put("by",user.getString("name")).put("syncReceipt",p.getString("id")).put("syncDevice",device));
+        JSONObject movement=new JSONObject().put("c",cycle).put("f",family).put("q",q).put("at",p.getString("at")).put("by",user.getString("name")).put("syncReceipt",p.getString("id")).put("syncDevice",device);
+        if(p.has("operator")||p.has("operatorId")){String operator=p.getString("operator"),operatorId=p.getString("operatorId");PairPackets.uuid(operatorId);require(!operator.trim().isEmpty()&&operator.length()<=120,"Invalid operator");movement.put("syncOperator",operator).put("syncOperatorId",operatorId).put("by",user.getString("name")+" / "+operator);}
+        local.getJSONArray("deliveries").put(movement);
         receipts.put(k,packet);
     }
     static JSONObject request(JSONObject s,String challenge,PrivateKey secret)throws Exception{
