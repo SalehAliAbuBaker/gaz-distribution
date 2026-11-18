@@ -67,6 +67,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String readState(){try{return isDistributor()?store.distributorWebState():store.readState();}catch(Exception e){return "";}}
         @JavascriptInterface public boolean writeState(String json){try{store.writeLocalState(json);return true;}catch(Exception e){return false;}}
         @JavascriptInterface public String deviceId(){return device;}
+        @JavascriptInterface public void openContact(String type){runOnUiThread(()->contact(type));}
         @JavascriptInterface public String deviceRole(){try{return store.role();}catch(Exception e){return "locked";}}
         @JavascriptInterface public void manageDevices(String admin){runOnUiThread(()->manageDevicesScreen(admin));}
         @JavascriptInterface public String allocatedRows(){try{return isDistributor()?"[]":pairing.allocations().toString();}catch(Exception e){return "";} }
@@ -163,9 +164,9 @@ public final class MainActivity extends Activity {
             if(families.isEmpty()){msg("لا توجد أسر متاحة للتخصيص في هذه الدورة");return;}
             java.util.ArrayList<String> selected=new java.util.ArrayList<>();
             LinearLayout p=pairLayout();pairText(p,"الحد لكل أسرة: "+c.getInt("quota")+" أسطوانة. لا يمكن نقل التخصيص إلى موزع آخر في هذه النسخة.");
-            EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث باسم الأسرة أو رقم المنزل");p.addView(search);
+            EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث باسم الأسرة أو المنزل أو المربع");p.addView(search);
             LinearLayout rows=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(rows);p.addView(scroll,new LinearLayout.LayoutParams(-1,(int)(300*getResources().getDisplayMetrics().density)));
-            Runnable render=()->{rows.removeAllViews();String q=search.getText().toString().trim();for(JSONObject f:families){String id=f.optString("id"),label=f.optInt("no")+" · "+f.optString("name")+" — منزل "+f.optString("house");if(!q.isEmpty()&&!label.contains(q))continue;
+            Runnable render=()->{rows.removeAllViews();String q=search.getText().toString().trim();for(JSONObject f:families){String id=f.optString("id"),label=f.optInt("no")+" · "+f.optString("name")+" — منزل "+f.optString("house")+" | مربع "+f.optString("square","");if(!q.isEmpty()&&!DistributorUsers.normalize(label).contains(DistributorUsers.normalize(q)))continue;
                 CheckBox check=new CheckBox(this);check.setText(label);check.setChecked(selected.contains(id));check.setOnCheckedChangeListener((v,on)->{if(on){if(!selected.contains(id))selected.add(id);}else selected.remove(id);});rows.addView(check);}};
             search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){render.run();}public void afterTextChanged(android.text.Editable e){}});
             render.run();
@@ -202,10 +203,10 @@ public final class MainActivity extends Activity {
         return "تم التسليم: "+r.optInt("q")+" | "+(r.optBoolean("synced")?"تمت المزامنة":"بانتظار المزامنة")+(at.isEmpty()?"":"\n"+at)+(op.isEmpty()?"":" | "+op);
     }
     private void readDistributorRows(boolean history){
-        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو المنزل أو الدورة");p.addView(search);
+        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو المنزل أو المربع أو الدورة");p.addView(search);
             LinearLayout list=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(list);p.addView(scroll,new LinearLayout.LayoutParams(-1,(int)(380*getResources().getDisplayMetrics().density)));
             Runnable draw=()->{list.removeAllViews();int count=0;String query=DistributorUsers.normalize(search.getText().toString());for(int i=0;i<all.length();i++){JSONObject r=all.optJSONObject(i);if(r==null||(history&&!r.optBoolean("done")))continue;
-                String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | "+r.optString("cycleTitle");if(!DistributorUsers.normalize(label).contains(query))continue;count++;pairText(list,label+"\n"+deliveryDescription(r));}
+                String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | مربع "+r.optString("square","")+" | "+r.optString("cycleTitle");if(!DistributorUsers.normalize(label).contains(query))continue;count++;pairText(list,label+"\n"+deliveryDescription(r));}
                 if(count==0)pairText(list,history?"لا توجد حركات تسليم مطابقة":"لا توجد أسر مطابقة");};
             search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});draw.run();
             new AlertDialog.Builder(this).setTitle(history?"سجل التسليم":"الأسر المخصصة").setView(p).setPositiveButton("إغلاق",null).show();
@@ -222,6 +223,14 @@ public final class MainActivity extends Activity {
             if(DistributorUsers.allowed(sessionUser(),"share"))d.setNeutralButton("مشاركة الكشف",(v,w)->{if(!distributorAllowed("share")||!distributorAllowed("reports"))return;Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});d.show();
         }catch(Exception e){msg("تعذر إعداد التقرير");}
     }
+    private void contact(String type){
+        try{Intent i;switch(type){case "phone":i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:+967734915588"));break;case "whatsapp":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588"));break;case "email":i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saleh0129@gmail.com"));break;default:return;}startActivity(i);}catch(Exception e){msg("تعذر فتح تطبيق التواصل");}
+    }
+    private void showContact(){
+        LinearLayout p=pairLayout();pairText(p,"توزيع الغاز\nتطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة للمطور.");
+        pairButton(p,"اتصال هاتفي: +967 734 915 588",()->contact("phone"));pairButton(p,"واتساب: +967 734 915 588",()->contact("whatsapp"));pairButton(p,"البريد: saleh0129@gmail.com",()->contact("email"));
+        new AlertDialog.Builder(this).setTitle("حول التطبيق والدعم").setView(p).setPositiveButton("إغلاق",null).show();
+    }
     private void distributorSettings(){
         try{JSONObject user=sessionUser();if(user==null)return;
             JSONObject s=pairing.status();LinearLayout p=pairLayout();pairText(p,"الحارة: "+s.getString("area")+"\nالمستخدم: "+user.getString("username")+"\n"+(s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد"));
@@ -229,6 +238,7 @@ public final class MainActivity extends Activity {
             AlertDialog d=new AlertDialog.Builder(this).setTitle("إعدادات الموزع").setView(p).setPositiveButton("إغلاق",null).create();
             if(DistributorUsers.allowed(user,"admin"))pairButton(p,"المستخدمون والصلاحيات",()->{d.dismiss();distributorUserList();});
             if(DistributorUsers.allowed(user,"sync"))pairButton(p,"المزامنة بعنوان IP (احتياطي)",()->{d.dismiss();connectLan(user.optString("id"));});
+            pairButton(p,"حول التطبيق والدعم",()->showContact());
             pairText(p,"إدارة التخصيص والاستعادة ونقل السلطة من الجوال الأم غير متاحة للموزع.");
             d.show();
         }catch(Exception e){msg("تعذر فتح الإعدادات");}
@@ -265,7 +275,7 @@ public final class MainActivity extends Activity {
             ScrollView sc=new ScrollView(this);sc.addView(p);AlertDialog dlg=new AlertDialog.Builder(this).setTitle("تسجيل التوزيع").setView(sc).setPositiveButton("إغلاق",null).create();
             if(rows.length()==0)pairText(p,"لا توجد أسر مخصصة بعد. نفّذ المزامنة أولًا.");
             for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);
-                pairText(p,r.getString("cycleTitle")+" | "+r.getInt("no")+" · "+r.getString("name")+" | منزل "+r.getString("house")+" | الحد "+r.getInt("maxQty"));
+                pairText(p,r.getString("cycleTitle")+" | "+r.getInt("no")+" · "+r.getString("name")+" | منزل "+r.getString("house")+" | مربع "+r.optString("square","")+" | الحد "+r.getInt("maxQty"));
                 if(r.getBoolean("done"))pairText(p,r.getBoolean("synced")?"تم التسليم — تمت المزامنة":"تم التسليم — بانتظار المزامنة");
                 else pairButton(p,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});
             }

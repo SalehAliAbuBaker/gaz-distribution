@@ -26,7 +26,7 @@ final class SyncRules {
         JSONObject c=find(local.getJSONArray("cycles"),cycle),f=find(local.getJSONArray("families"),family);
         require(c!=null&&f!=null&&!c.optBoolean("closed")&&delivery(local,cycle,family)==null,"Unavailable family/cycle");
         String k=key(cycle,family);JSONObject grants=map(state,"grants");require(!grants.has(k),"Already allocated");require(grants.length()<20000,"Test grant limit");
-        JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(c.getInt("quota")))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no"));
+        JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(c.getInt("quota")))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
         String packet=SyncWire.sign(p,secret);grants.put(k,packet);return packet;
     }
     static JSONObject grantPayload(JSONObject s,String packet,String device)throws Exception{
@@ -71,15 +71,16 @@ final class SyncRules {
         JSONObject p=SyncWire.verify(request,user.getString("pub"),"sync");context(s,p,device);require(challenge.equals(p.getString("challenge")),"Stale challenge");
         JSONArray incoming=p.getJSONArray("receipts");require(incoming.length()<=20000,"Too many receipts");
         for(int i=0;i<incoming.length();i++)importReceipt(s,local,device,incoming.getString(i));
-        JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts");
+        JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts"),squares=new JSONObject();
         for(Iterator<String> it=g.keys();it.hasNext();){String k=it.next(),packet=g.getString(k);JSONObject gp=SyncWire.peek(packet);
-            if(device.equals(gp.getString("device"))){grants.put(packet);if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));}}
-        return base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks);
+            if(device.equals(gp.getString("device"))){grants.put(packet);JSONObject family=find(local.getJSONArray("families"),gp.getString("family"));require(family!=null,"Missing allocated family");squares.put(k,family.optString("square",""));if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));}}
+        return base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares);
     }
     static void acceptResponse(JSONObject s,String packet,String challenge)throws Exception{
         JSONObject p=SyncWire.verify(packet,s.getString("motherPub"),"result");context(s,p,s.getString("device"));require(challenge.equals(p.getString("challenge")),"Stale response");
         JSONArray grants=p.getJSONArray("grants"),acks=p.getJSONArray("acks");require(grants.length()<=20000&&acks.length()<=20000,"Too many records");
         for(int i=0;i<grants.length();i++)acceptGrant(s,grants.getString(i));
+        if(p.has("squares")){JSONObject incoming=p.getJSONObject("squares"),known=map(s,"grants"),labels=map(s,"squareLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&((String)value).length()<=80,"Invalid square label");labels.put(k,value);}}
         Set<String> ids=new HashSet<>();for(int i=0;i<acks.length();i++)ids.add(acks.getString(i));
         JSONObject out=map(s,"outbox"),accepted=map(s,"acked");
         for(Iterator<String> it=out.keys();it.hasNext();){String k=it.next();if(ids.contains(SyncWire.peek(out.getString(k)).getString("id")))accepted.put(k,true);}
