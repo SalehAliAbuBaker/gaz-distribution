@@ -69,16 +69,16 @@ final class SyncRules {
     static JSONObject respond(JSONObject s,JSONObject local,String request,String challenge)throws Exception{
         JSONObject peek=SyncWire.peek(request);String device=peek.getString("device");JSONObject user=child(s,device);
         JSONObject p=SyncWire.verify(request,user.getString("pub"),"sync");context(s,p,device);require(challenge.equals(p.getString("challenge")),"Stale challenge");
-        JSONArray incoming=p.getJSONArray("receipts");require(incoming.length()<=20000,"Too many receipts");
+        CentralUsers.observe(s,device,p);boolean policyOnly=p.optBoolean("policyOnly",false);JSONArray incoming=p.getJSONArray("receipts");require(incoming.length()<=20000&&(!policyOnly||incoming.length()==0),"Invalid receipts");
         for(int i=0;i<incoming.length();i++)importReceipt(s,local,device,incoming.getString(i));
         JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts"),squares=new JSONObject();
-        for(Iterator<String> it=g.keys();it.hasNext();){String k=it.next(),packet=g.getString(k);JSONObject gp=SyncWire.peek(packet);
+        if(!policyOnly)for(Iterator<String> it=g.keys();it.hasNext();){String k=it.next(),packet=g.getString(k);JSONObject gp=SyncWire.peek(packet);
             if(device.equals(gp.getString("device"))){grants.put(packet);JSONObject family=find(local.getJSONArray("families"),gp.getString("family"));require(family!=null,"Missing allocated family");squares.put(k,family.optString("square",""));if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));}}
-        return base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares);
+        JSONObject result=base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares);JSONObject accounts=CentralUsers.policy(s,device);if(accounts!=null)result.put("accountPolicy",accounts);return result;
     }
     static void acceptResponse(JSONObject s,String packet,String challenge)throws Exception{
         JSONObject p=SyncWire.verify(packet,s.getString("motherPub"),"result");context(s,p,s.getString("device"));require(challenge.equals(p.getString("challenge")),"Stale response");
-        JSONArray grants=p.getJSONArray("grants"),acks=p.getJSONArray("acks");require(grants.length()<=20000&&acks.length()<=20000,"Too many records");
+        CentralUsers.accept(s,p);JSONArray grants=p.getJSONArray("grants"),acks=p.getJSONArray("acks");require(grants.length()<=20000&&acks.length()<=20000,"Too many records");
         for(int i=0;i<grants.length();i++)acceptGrant(s,grants.getString(i));
         if(p.has("squares")){JSONObject incoming=p.getJSONObject("squares"),known=map(s,"grants"),labels=map(s,"squareLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&((String)value).length()<=80,"Invalid square label");labels.put(k,value);}}
         Set<String> ids=new HashSet<>();for(int i=0;i<acks.length();i++)ids.add(acks.getString(i));

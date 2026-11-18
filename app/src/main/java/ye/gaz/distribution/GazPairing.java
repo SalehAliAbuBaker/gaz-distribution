@@ -30,6 +30,13 @@ final class GazPairing {
             PairPackets.require(device.equals(saved.getString("device"))&&pub.equals(saved.getString("pub")),"Identity changed");
         }
     }
+    long accountRevision()throws Exception{return CentralUsers.revision(status());}
+    void activateCentral(String child)throws Exception{
+        synchronized(store){JSONObject state=status();PairPackets.require("mother".equals(state.getString("role")),"Mother required");CentralUsers.activate(state,child);store.commitSync(state,null);}
+    }
+    void editCentral(String child,String id,String name,String password,JSONObject perms,boolean enabled)throws Exception{
+        synchronized(store){JSONObject state=status();PairPackets.require("mother".equals(state.getString("role")),"Mother required");CentralUsers.edit(state,child,id,name,password,perms,enabled);store.commitSync(state,null);}
+    }
     void allocate(String child,String cycle,java.util.List<String> families)throws Exception{
         synchronized(store){
             JSONObject state=status(),local=new JSONObject(store.readState());
@@ -65,11 +72,11 @@ final class GazPairing {
     }
     String syncQr(String ip)throws Exception{return SyncEndpoint.sign(status(),ip,secret);}
     String readSyncQr(String packet)throws Exception{return SyncEndpoint.read(status(),packet);}
-    void synchronize(android.content.Context context,String ip)throws Exception{
+    void synchronize(android.content.Context context,String ip,boolean policyOnly)throws Exception{
         JSONObject before=status();PairPackets.require("distributor".equals(before.getString("role")),"Distributor required");
         GazLan.connect(ip,before.getString("motherPub"),target->GazNetwork.socket(context,target),new GazLan.Exchange(){
-            public String request(String challenge)throws Exception{synchronized(store){return SyncWire.sign(SyncRules.request(status(),challenge,secret),secret);}}
-            public void accept(String response,String challenge)throws Exception{synchronized(store){JSONObject state=status();SyncRules.acceptResponse(state,response,challenge);state.put("lastSync",System.currentTimeMillis());store.commitSync(state,null);}}
+            public String request(String challenge)throws Exception{synchronized(store){JSONObject state=status(),request=SyncRules.request(state,challenge,secret);request.put("accountsProtocol",1).put("accountsRevision",CentralUsers.revision(state)).put("policyOnly",policyOnly);if(CentralUsers.revision(state)==0)request.put("accountRoster",CentralUsers.roster(store.distributorUsers()));if(policyOnly)request.put("receipts",new JSONArray());return SyncWire.sign(request,secret);}}
+            public void accept(String response,String challenge)throws Exception{synchronized(store){JSONObject state=status();if(policyOnly){JSONObject p=SyncWire.verify(response,state.getString("motherPub"),"result");SyncRules.context(state,p,state.getString("device"));SyncRules.require(challenge.equals(p.getString("challenge")),"Stale response");CentralUsers.accept(state,p);}else SyncRules.acceptResponse(state,response,challenge);state.put(policyOnly?"lastPolicySync":"lastSync",System.currentTimeMillis());store.commitSync(state,null);}}
         });
     }
     String fingerprint()throws Exception{return PairPackets.shortFingerprint(pub);}

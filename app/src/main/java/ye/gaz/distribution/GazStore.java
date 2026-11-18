@@ -74,14 +74,14 @@ final class GazStore extends SQLiteOpenHelper {
     synchronized void restoreIndependent(String json)throws Exception{if(!role().equals("independent"))throw new IllegalStateException("Pair recovery not implemented");writeState(json);}
     synchronized JSONArray distributorUsers()throws Exception{
         if(!"distributor".equals(role()))throw new SecurityException("Distributor required");
-        return new JSONObject(readState()).getJSONArray("users");
+        return CentralUsers.effective(pairRead(),new JSONObject(readState()).getJSONArray("users"));
     }
     synchronized void saveDistributorUser(String actor,String id,String name,String password,JSONObject perms)throws Exception{
-        JSONArray next=DistributorUsers.save(distributorUsers(),actor,id,name,password,perms);
+        if(CentralUsers.revision(pairRead())>0)throw new SecurityException("Managed centrally");JSONArray next=DistributorUsers.save(distributorUsers(),actor,id,name,password,perms);
         JSONObject local=new JSONObject(readState());local.put("users",next);writeState(local.toString());
     }
     synchronized void removeDistributorUser(String actor,String id)throws Exception{
-        JSONArray next=DistributorUsers.remove(distributorUsers(),actor,id);
+        if(CentralUsers.revision(pairRead())>0)throw new SecurityException("Managed centrally");JSONArray next=DistributorUsers.remove(distributorUsers(),actor,id);
         JSONObject local=new JSONObject(readState());local.put("users",next);writeState(local.toString());
     }
     synchronized String distributorWebState()throws Exception{

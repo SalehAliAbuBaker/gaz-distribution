@@ -80,6 +80,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String distributorSession(){try{JSONObject u=sessionUser();return u==null?"":DistributorUsers.publicUser(u).toString();}catch(Exception e){return "";}}
         @JavascriptInterface public void distributorLogout(){if(isDistributor())distributorSessionId=null;}
         @JavascriptInterface public void distributorAction(String action){runOnUiThread(()->openDistributorAction(action));}
+        @JavascriptInterface public void centralAccounts(String admin){runOnUiThread(()->centralDevices(admin));}
+        @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
         @JavascriptInterface public void backup(){if(!isDistributor())runOnUiThread(()->askPass(true,null));}
         @JavascriptInterface public void restore(){runOnUiThread(()->{try{if(!store.role().equals("independent")){msg("الاستعادة بعد الاقتران تحتاج آلية استرداد السلطة؛ غير متاحة الآن");return;}}catch(Exception e){msg("تعذر التحقق من حالة الربط");return;}Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,RESTORE);});}
         @JavascriptInterface public void shareText(String text){if(isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
@@ -125,6 +127,7 @@ public final class MainActivity extends Activity {
                 pairButton(p,"مسح طلب ربط موزع جديد",()->{d.dismiss();scanQr("request",admin);});
                 JSONObject devices=s.getJSONObject("devices");
                 pairText(p,"الأجهزة المسجلة: "+devices.length());
+                pairButton(p,"الإدارة المركزية لمستخدمي الموزعين",()->{d.dismiss();centralDevices(admin);});
                 pairButton(p,"تخصيص أسر لدورة توزيع",()->{d.dismiss();chooseAllocation(admin);});
                 pairButton(p,"عرض التخصيصات وحالات التسليم",()->{d.dismiss();motherAllocations(admin);});
                 pairButton(p,"فتح المزامنة على الشبكة المحلية",()->{d.dismiss();chooseLan(admin);});
@@ -143,6 +146,48 @@ public final class MainActivity extends Activity {
             }
             d.show();
         }catch(Exception e){msg("تعذر فتح إدارة الجوالات؛ لم يتم تغيير بياناتك");}
+    }
+    private void centralDevices(String admin){
+        if(!adminAllowed(admin))return;
+        try{JSONObject s=pairing.status();PairPackets.require("mother".equals(s.getString("role")),"Mother required");JSONObject devices=s.getJSONObject("devices");
+            LinearLayout p=pairLayout();pairText(p,"اختر الموزع. تُطبق التغييرات عند مزامنته؛ يتأكد وصولها عند المزامنة التالية.");
+            ScrollView sc=new ScrollView(this);sc.addView(p);AlertDialog d=new AlertDialog.Builder(this).setTitle("الإدارة المركزية للموزعين").setView(sc).setPositiveButton("إغلاق",null).create();
+            if(devices.length()==0)pairText(p,"لا توجد جوالات مرتبطة.");
+            for(java.util.Iterator<String> it=devices.keys();it.hasNext();){String id=it.next();JSONObject child=devices.getJSONObject(id),policy=CentralUsers.policy(s,id),status=CentralUsers.status(s,id);
+                long rev=CentralUsers.rev(policy),applied=status==null?0:status.optLong("applied");String detail=rev==0?(status==null?"حدّث الموزع وزامن أولًا":"جاهز لتفعيل الإدارة"):(applied==rev?"مؤكدة — "+rev:"بانتظار تأكيد وصول الإصدار "+rev);
+                pairButton(p,child.getString("name")+" — "+detail,()->{d.dismiss();centralDevice(admin,id);});}
+            d.show();
+        }catch(Exception e){msg("تعذر عرض الأجهزة المرتبطة");}
+    }
+    private void centralDevice(String admin,String child){
+        if(!adminAllowed(admin))return;
+        try{JSONObject s=pairing.status(),device=SyncRules.child(s,child),policy=CentralUsers.policy(s,child),seen=CentralUsers.status(s,child);
+            LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.addView(p);
+            AlertDialog d=new AlertDialog.Builder(this).setTitle("مستخدمو "+device.getString("name")).setView(sc).setPositiveButton("إغلاق",null).create();
+            if(policy==null){
+                if(seen==null||!seen.has("roster"))pairText(p,"حدّث هذا الجوال وزامن مرة واحدة لاستيراد أسماء حساباته.");
+                else{JSONArray roster=seen.getJSONArray("roster");for(int i=0;i<roster.length();i++)pairText(p,roster.getJSONObject(i).getString("username"));
+                    pairButton(p,"تفعيل الإدارة المركزية",()->new AlertDialog.Builder(this).setTitle("تفعيل الإدارة المركزية؟").setMessage("تنتقل إدارة الصلاحيات إلى الأم بعد المزامنة. تبقى كلمات المرور القديمة على الموزع؛ وتبقى الحركات السابقة محفوظة.").setNegativeButton("إلغاء",null).setPositiveButton("تفعيل",(v,w)->{try{if(!adminAllowed(admin))return;pairing.activateCentral(child);d.dismiss();centralDevice(admin,child);}catch(Exception e){msg("تعذر التفعيل");}}).show());}
+            }else{
+                long rev=CentralUsers.rev(policy),applied=seen==null?0:seen.optLong("applied");pairText(p,applied==rev?"الصلاحيات مؤكدة":"بانتظار تأكيد وصول التعديلات (الإصدار "+rev+")");
+                pairButton(p,"إضافة مستخدم",()->{d.dismiss();centralEdit(admin,child,null);});
+                JSONArray a=policy.getJSONArray("users");for(int i=0;i<a.length();i++){JSONObject u=a.getJSONObject(i);StringBuilder labels=new StringBuilder();
+                    for(int j=0;j<CentralUsers.PERMS.length;j++)if(u.getJSONObject("permissions").optBoolean(CentralUsers.PERMS[j])){if(labels.length()>0)labels.append("، ");labels.append(CentralUsers.LABELS[j]);}
+                    pairText(p,u.getString("username")+" — "+(u.getBoolean("enabled")?"نشط":"موقوف")+"\n"+labels);
+                    pairButton(p,"تعديل الصلاحيات / الإيقاف",()->{d.dismiss();centralEdit(admin,child,u);});}
+            }d.show();
+        }catch(Exception e){msg("تعذر عرض حسابات الموزع");}
+    }
+    private void centralEdit(String admin,String child,JSONObject old){
+        if(!adminAllowed(admin))return;
+        LinearLayout p=pairLayout();EditText name=new EditText(this),password=new EditText(this);
+        name.setSingleLine(true);name.setHint("اسم المستخدم");password.setHint(old==null?"كلمة المرور (6 أحرف فأكثر)":"كلمة مرور جديدة (اختياري)");password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        if(old!=null)name.setText(old.optString("username"));p.addView(name);p.addView(password);
+        CheckBox eye=new CheckBox(this);eye.setText("إظهار كلمة المرور");eye.setOnCheckedChangeListener((v,on)->{password.setTransformationMethod(on?null:android.text.method.PasswordTransformationMethod.getInstance());password.setSelection(password.length());});p.addView(eye);
+        CheckBox active=new CheckBox(this);active.setText("الحساب نشط");active.setChecked(old==null||old.optBoolean("enabled",true));p.addView(active);
+        CheckBox[] checks=new CheckBox[CentralUsers.PERMS.length];for(int i=0;i<checks.length;i++){checks[i]=new CheckBox(this);checks[i].setText(CentralUsers.LABELS[i]);checks[i].setChecked(old==null?"view".equals(CentralUsers.PERMS[i]):old.optJSONObject("permissions").optBoolean(CentralUsers.PERMS[i]));p.addView(checks[i]);}
+        ScrollView sc=new ScrollView(this);sc.addView(p);AlertDialog d=new AlertDialog.Builder(this).setTitle(old==null?"إضافة مستخدم موزع":"تعديل مستخدم موزع").setView(sc).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",null).create();
+        d.setOnShowListener(v->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{try{if(!adminAllowed(admin))return;JSONObject perms=new JSONObject();for(int i=0;i<checks.length;i++)perms.put(CentralUsers.PERMS[i],checks[i].isChecked());pairing.editCentral(child,old==null?null:old.getString("id"),name.getText().toString(),password.getText().toString(),perms,active.isChecked());d.dismiss();centralDevice(admin,child);msg("تم الحفظ؛ بانتظار المزامنة");}catch(Exception e){msg("تعذر الحفظ؛ راجع الاسم وكلمة المرور");}}));d.show();
     }
     private void chooseAllocation(String admin){
         if(!adminAllowed(admin))return;
@@ -236,7 +281,8 @@ public final class MainActivity extends Activity {
             JSONObject s=pairing.status();LinearLayout p=pairLayout();pairText(p,"الحارة: "+s.getString("area")+"\nالمستخدم: "+user.getString("username")+"\n"+(s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد"));
             pairText(p,"بصمة الجوال الأم: "+PairPackets.shortFingerprint(s.getString("motherPub")));
             AlertDialog d=new AlertDialog.Builder(this).setTitle("إعدادات الموزع").setView(p).setPositiveButton("إغلاق",null).create();
-            if(DistributorUsers.allowed(user,"admin"))pairButton(p,"المستخدمون والصلاحيات",()->{d.dismiss();distributorUserList();});
+            if(pairing.accountRevision()>0)pairText(p,"الحساب والصلاحيات تُدار من الجوال الأم.");else if(DistributorUsers.allowed(user,"admin"))pairButton(p,"المستخدمون والصلاحيات",()->{d.dismiss();distributorUserList();});
+            pairButton(p,"تحديث صلاحياتي من الجوال الأم",()->{d.dismiss();scanQr("policy","device-policy");});
             if(DistributorUsers.allowed(user,"sync"))pairButton(p,"المزامنة بعنوان IP (احتياطي)",()->{d.dismiss();connectLan(user.optString("id"));});
             pairButton(p,"حول التطبيق والدعم",()->showContact());
             pairText(p,"إدارة التخصيص والاستعادة ونقل السلطة من الجوال الأم غير متاحة للموزع.");
@@ -318,22 +364,23 @@ public final class MainActivity extends Activity {
             syncAddress(admin,ip.getText().toString().trim());
         }).show();
     }
-    private void syncAddress(String admin,String ip){
-        if(!syncAllowed(admin))return;
+    private void syncAddress(String admin,String ip){syncAddress(admin,ip,false);}
+    private void syncAddress(String admin,String ip,boolean policyOnly){
+        if(policyOnly?!isDistributor():!syncAllowed(admin))return;
         ProgressDialog busy=ProgressDialog.show(this,"المزامنة","جارٍ التحقق وتبادل البيانات…",true,false);
-        network.execute(()->{try{pairing.synchronize(this,ip);runOnUiThread(()->{busy.dismiss();notifyPairChange();msg("تمت المزامنة بنجاح");});}
+        network.execute(()->{try{long before=pairing.accountRevision();pairing.synchronize(this,ip,policyOnly);boolean changed=pairing.accountRevision()!=before;runOnUiThread(()->{busy.dismiss();if(changed)distributorSessionId=null;notifyPairChange();msg(changed?"تم تحديث الصلاحيات؛ سجل الدخول مجددًا":policyOnly?"تم تحديث الحسابات":"تمت المزامنة بنجاح");});}
             catch(Exception e){runOnUiThread(()->{busy.dismiss();new AlertDialog.Builder(this).setTitle("لم تكتمل المزامنة").setMessage(GazLan.diagnostic(e)+"\nحركاتك محفوظة. أرسل صورة هذه الرسالة عند تكرار المشكلة.").setPositiveButton("إغلاق",null).show();});}});
     }
     @Override protected void onPause(){closeLan();super.onPause();}
     private void scanQr(String mode,String admin){
-        if("sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
+        if("policy".equals(mode)?!isDistributor():"sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
         scanMode=mode;scanAdmin=admin;
         new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE).setCaptureActivity(PortraitCaptureActivity.class).setPrompt("وجّه الكاميرا إلى رمز QR").setBeepEnabled(false).setOrientationLocked(true).initiateScan();
     }
     private void handlePairScan(String mode,String admin,String packet){
-        if("sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
+        if("policy".equals(mode)?!isDistributor():"sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
         try{
-            if(mode.equals("sync")){String ip=pairing.readSyncQr(packet);syncAddress(admin,ip);}
+            if(mode.equals("sync")||mode.equals("policy")){String ip=pairing.readSyncQr(packet);syncAddress(admin,ip,mode.equals("policy"));}
             else if(mode.equals("request")){
                 JSONObject r=PairPackets.unpack(packet,"request");String fp=PairPackets.shortFingerprint(r.getString("pub"));
                 new AlertDialog.Builder(this).setTitle("قبول الموزع؟").setMessage("الاسم: "+r.getString("name")+"\nالبصمة: "+fp+"\nقارن البصمة بالتي تظهر على جوال الموزع نفسه. لا توافق إن اختلفت.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;String approval=pairing.approve(packet);notifyPairChange();showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح هذا الرمز من جهاز الموزع وقارن بصمة الأم.");}catch(Exception e){msg("رفض الطلب؛ تعارض أو جهاز مسجل سابقًا");}}).show();
