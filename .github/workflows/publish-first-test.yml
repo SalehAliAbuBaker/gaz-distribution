@@ -1,0 +1,38 @@
+name: Publish first Android test download
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-first-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: gaz-first-test-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve previously built APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 44316655677 --name Gaz-Distribution-0.2.0-test --dir apk
+          test -s apk/app-debug.apk
+          cp apk/app-debug.apk Gaz-Distribution-0.2.0-test.apk
+          unzip -tq Gaz-Distribution-0.2.0-test.apk
+      - name: Publish test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=v0.2.0-test
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" Gaz-Distribution-0.2.0-test.apk
+          else
+            gh release create "$tag" Gaz-Distribution-0.2.0-test.apk --target 05329278739c9fbe94fc778a3417adb2b699095a --title "Gaz Distribution 0.2.0 — Android test" --notes "نسخة اختبار لجهاز واحد ببيانات وهمية فقط. لا مزامنة بين الأجهزة بعد. توقيع تجريبي، غير معتمد للتشغيل الفعلي." --prerelease
+          fi
