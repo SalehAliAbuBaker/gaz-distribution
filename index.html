@@ -132,7 +132,7 @@ $('areaForm').onsubmit=e=>{e.preventDefault();if(!requireP('admin'))return;let a
 setTimeout(()=>{$('intro').style.opacity=0;setTimeout(()=>$('intro').remove(),550)},2200);
 try{let u=lookup(data.users,sessionStorage.getItem(sessions));if(u)setUser(u);else show('login')}catch{show('login')}
 if(nativeHost){
- document.querySelector('header small').textContent='إدارة المستفيدين ودورات التوزيع · أندرويد 0.2.0 تجريبي';
+ document.querySelector('header small').textContent='إدارة المستفيدين ودورات التوزيع · أندرويد 0.2.1 تجريبي';
  document.querySelector('main>.warn').textContent='نسخة أندرويد تجريبية لجهاز واحد. التخزين مشفر محليًا. لا تستخدم بيانات حقيقية قبل اختبار الاستعادة والربط والصلاحيات.';
  const panel=document.createElement('div');panel.className='panel';
  const title=document.createElement('h3');title.textContent='البيانات والنسخ الاحتياطي';panel.append(title);
