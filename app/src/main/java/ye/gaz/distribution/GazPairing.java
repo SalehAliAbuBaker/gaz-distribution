@@ -52,7 +52,7 @@ final class GazPairing {
         synchronized(store){JSONObject state=status();SyncRules.record(state,key,quantity,secret);store.commitSync(state,null);}
     }
     GazLan listen(String ip)throws Exception{
-        PairPackets.require("mother".equals(status().getString("role")),"Mother required");return new GazLan(ip,secret,cert);
+        PairPackets.require("mother".equals(status().getString("role")),"Mother required");return new GazLan(ip,secret);
     }
     String respond(String request,String challenge)throws Exception{
         synchronized(store){
@@ -61,9 +61,11 @@ final class GazPairing {
             store.commitSync(state,local);return response;
         }
     }
-    void synchronize(String ip)throws Exception{
+    String syncQr(String ip)throws Exception{return SyncEndpoint.sign(status(),ip,secret);}
+    String readSyncQr(String packet)throws Exception{return SyncEndpoint.read(status(),packet);}
+    void synchronize(android.content.Context context,String ip)throws Exception{
         JSONObject before=status();PairPackets.require("distributor".equals(before.getString("role")),"Distributor required");
-        GazLan.connect(ip,before.getString("motherPub"),new GazLan.Exchange(){
+        GazLan.connect(ip,before.getString("motherPub"),target->GazNetwork.socket(context,target),new GazLan.Exchange(){
             public String request(String challenge)throws Exception{synchronized(store){return SyncWire.sign(SyncRules.request(status(),challenge,secret),secret);}}
             public void accept(String response,String challenge)throws Exception{synchronized(store){JSONObject state=status();SyncRules.acceptResponse(state,response,challenge);state.put("lastSync",System.currentTimeMillis());store.commitSync(state,null);}}
         });

@@ -118,7 +118,8 @@ public final class MainActivity extends Activity {
                 pairText(p,"موزع مقترن بحارة: "+s.getString("area"));
                 pairText(p,"بصمة الجوال الأم: "+PairPackets.shortFingerprint(s.getString("motherPub")));
                 pairText(p,s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد.");
-                pairButton(p,"مزامنة مع الجوال الأم",()->{d.dismiss();connectLan(admin);});
+                pairButton(p,"مزامنة بمسح رمز QR للجوال الأم",()->{d.dismiss();scanQr("sync",admin);});
+                pairButton(p,"إدخال العنوان يدويًا (احتياطي)",()->{d.dismiss();connectLan(admin);});
                 pairButton(p,"تسجيل توزيع الأسر المخصصة",()->{d.dismiss();distributorScreen(admin);});
             }
             d.show();
@@ -185,44 +186,51 @@ public final class MainActivity extends Activity {
     private void chooseLan(String admin){
         if(!adminAllowed(admin))return;
         try{
-            java.util.ArrayList<String> ips=GazLan.addresses();if(ips.isEmpty()){msg("اتصل بشبكة Wi-Fi أو شغّل نقطة الاتصال أولًا");return;}
-            new AlertDialog.Builder(this).setTitle("اختر عنوان شبكة الجوال الأم").setItems(ips.toArray(new String[0]),(d,i)->startLan(admin,ips.get(i))).setNegativeButton("إلغاء",null).show();
+            java.util.LinkedHashMap<String,String> addresses=GazNetwork.addresses(this);if(addresses.isEmpty()){msg("اتصل بشبكة Wi-Fi أو شغّل نقطة الاتصال أولًا");return;}
+            java.util.ArrayList<String> ips=new java.util.ArrayList<>(addresses.keySet());if(ips.size()==1){startLan(admin,ips.get(0));return;}
+            new AlertDialog.Builder(this).setTitle("اختر Wi-Fi أو نقطة الاتصال").setItems(addresses.values().toArray(new String[0]),(d,i)->startLan(admin,ips.get(i))).setNegativeButton("إلغاء",null).show();
         }catch(Exception e){msg("تعذر قراءة عنوان الشبكة");}
     }
     private void startLan(String admin,String ip){
         if(!adminAllowed(admin))return;closeLan();
-        LinearLayout p=pairLayout();pairText(p,"اكتب هذا العنوان على جوال الموزع: "+ip);pairText(p,"أبق هذه النافذة مفتوحة حتى تكتمل المزامنة. يجب أن يكون الجوالان على الشبكة نفسها.");
+        LinearLayout p=pairLayout();pairText(p,"امسح رمز المزامنة من جوال الموزع. يجب اتصال الجوالين بالشبكة نفسها.");pairText(p,"العنوان الاحتياطي: "+ip);
+        ImageView qr=new ImageView(this);qr.setAdjustViewBounds(true);qr.setVisibility(android.view.View.GONE);p.addView(qr,new LinearLayout.LayoutParams(-1,(int)(250*getResources().getDisplayMetrics().density)));
         TextView status=new TextView(this);status.setText("جارٍ فتح الاتصال…");p.addView(status);
         AlertDialog d=new AlertDialog.Builder(this).setTitle("المزامنة المحلية المشفرة").setView(p).setPositiveButton("إنهاء",null).create();
-        d.setOnDismissListener(v->{closeLan();notifyPairChange();});d.show();
+        d.setOnDismissListener(v->{closeLan();notifyPairChange();});d.show();d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         // Socket initialization and I/O are off the UI thread; cancel closes listener.
         network.execute(()->{GazLan server=null;try{
-            server=pairing.listen(ip);final GazLan active=server;java.util.concurrent.CountDownLatch visible=new java.util.concurrent.CountDownLatch(1);final boolean[] accept={false};
-            runOnUiThread(()->{if(d.isShowing()&&!isFinishing()){lan=active;status.setText("بانتظار الموزع");accept[0]=true;}visible.countDown();});
+            server=pairing.listen(ip);final GazLan active=server;final Bitmap code=qrBitmap(pairing.syncQr(ip));java.util.concurrent.CountDownLatch visible=new java.util.concurrent.CountDownLatch(1);final boolean[] accept={false};
+            runOnUiThread(()->{if(d.isShowing()&&!isFinishing()){lan=active;qr.setImageBitmap(code);qr.setVisibility(android.view.View.VISIBLE);status.setText("بانتظار مسح رمز QR");accept[0]=true;}visible.countDown();});
             if(!visible.await(5,java.util.concurrent.TimeUnit.SECONDS)||!accept[0])return;
             active.serve(pairing::respond,info->runOnUiThread(()->{if(d.isShowing())status.setText(info);}));
-        }catch(Exception e){runOnUiThread(()->{if(d.isShowing())status.setText("تعذر فتح الاتصال؛ تحقق من الشبكة والعنوان");});}finally{if(server!=null)server.close();}});
+        }catch(Exception e){runOnUiThread(()->{if(d.isShowing())status.setText(GazLan.diagnostic(e));});}finally{if(server!=null)server.close();}});
     }
     private void closeLan(){GazLan s=lan;lan=null;if(s!=null)s.close();}
     private void connectLan(String admin){
         if(!adminAllowed(admin))return;
         EditText ip=new EditText(this);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_TEXT);ip.setHint("192.168.x.x");
         new AlertDialog.Builder(this).setTitle("المزامنة مع الجوال الأم").setMessage("أدخل عنوان Wi-Fi المعروض على شاشة مزامنة الأم.").setView(ip).setNegativeButton("إلغاء",null).setPositiveButton("مزامنة",(d,w)->{
-            String address=ip.getText().toString().trim();ProgressDialog busy=ProgressDialog.show(this,"المزامنة","جارٍ التحقق وتبادل البيانات…",true,false);
-            network.execute(()->{try{pairing.synchronize(address);runOnUiThread(()->{busy.dismiss();notifyPairChange();msg("تمت المزامنة بنجاح");});}
-                catch(Exception e){runOnUiThread(()->{busy.dismiss();msg("لم تكتمل المزامنة؛ تحقق من الشبكة وهوية الجوال الأم. حركاتك محفوظة.");});}});
+            syncAddress(admin,ip.getText().toString().trim());
         }).show();
+    }
+    private void syncAddress(String admin,String ip){
+        if(!adminAllowed(admin))return;
+        ProgressDialog busy=ProgressDialog.show(this,"المزامنة","جارٍ التحقق وتبادل البيانات…",true,false);
+        network.execute(()->{try{pairing.synchronize(this,ip);runOnUiThread(()->{busy.dismiss();notifyPairChange();msg("تمت المزامنة بنجاح");});}
+            catch(Exception e){runOnUiThread(()->{busy.dismiss();new AlertDialog.Builder(this).setTitle("لم تكتمل المزامنة").setMessage(GazLan.diagnostic(e)+"\nحركاتك محفوظة. أرسل صورة هذه الرسالة عند تكرار المشكلة.").setPositiveButton("إغلاق",null).show();});}});
     }
     @Override protected void onPause(){closeLan();super.onPause();}
     private void scanQr(String mode,String admin){
         if(!adminAllowed(admin))return;
         scanMode=mode;scanAdmin=admin;
-        new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE).setPrompt("وجّه الكاميرا إلى رمز الاقتران").setBeepEnabled(false).setOrientationLocked(false).initiateScan();
+        new IntentIntegrator(this).setDesiredBarcodeFormats(IntentIntegrator.QR_CODE).setCaptureActivity(PortraitCaptureActivity.class).setPrompt("وجّه الكاميرا إلى رمز QR").setBeepEnabled(false).setOrientationLocked(true).initiateScan();
     }
     private void handlePairScan(String mode,String admin,String packet){
         if(!adminAllowed(admin))return;
         try{
-            if(mode.equals("request")){
+            if(mode.equals("sync")){String ip=pairing.readSyncQr(packet);syncAddress(admin,ip);}
+            else if(mode.equals("request")){
                 JSONObject r=PairPackets.unpack(packet,"request");String fp=PairPackets.shortFingerprint(r.getString("pub"));
                 new AlertDialog.Builder(this).setTitle("قبول الموزع؟").setMessage("الاسم: "+r.getString("name")+"\nالبصمة: "+fp+"\nقارن البصمة بالتي تظهر على جوال الموزع نفسه. لا توافق إن اختلفت.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;String approval=pairing.approve(packet);notifyPairChange();showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح هذا الرمز من جهاز الموزع وقارن بصمة الأم.");}catch(Exception e){msg("رفض الطلب؛ تعارض أو جهاز مسجل سابقًا");}}).show();
             }else if(mode.equals("approval")){
@@ -231,10 +239,13 @@ public final class MainActivity extends Activity {
             }
         }catch(Exception e){msg("الرمز غير صالح أو لا يخص هذا الجهاز");}
     }
-    private void showQr(String title,String packet,String fp,String desc)throws Exception{
+    private Bitmap qrBitmap(String packet)throws Exception{
         BitMatrix bits=new QRCodeWriter().encode(packet,BarcodeFormat.QR_CODE,720,720);int[] pixels=new int[720*720];
         for(int y=0;y<720;y++)for(int x=0;x<720;x++)pixels[y*720+x]=bits.get(x,y)?Color.BLACK:Color.WHITE;
-        Bitmap bitmap=Bitmap.createBitmap(pixels,720,720,Bitmap.Config.ARGB_8888);
+        return Bitmap.createBitmap(pixels,720,720,Bitmap.Config.ARGB_8888);
+    }
+    private void showQr(String title,String packet,String fp,String desc)throws Exception{
+        Bitmap bitmap=qrBitmap(packet);
         LinearLayout p=pairLayout();pairText(p,desc);pairText(p,"البصمة: "+fp);
         ImageView image=new ImageView(this);image.setImageBitmap(bitmap);image.setAdjustViewBounds(true);p.addView(image,new LinearLayout.LayoutParams(-1,-2));
         ScrollView scroll=new ScrollView(this);scroll.addView(p);
