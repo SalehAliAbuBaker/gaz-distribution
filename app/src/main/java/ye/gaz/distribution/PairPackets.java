@@ -7,6 +7,11 @@ import java.security.interfaces.ECPublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
 import java.util.UUID;
 
 /** Offline QR messages: public identity only, never credentials or beneficiary data. */
@@ -30,7 +35,10 @@ final class PairPackets {
     private static PublicKey key(String pub)throws Exception{
         if(pub.length()>250)throw new GeneralSecurityException("Public key too long");
         PublicKey key=KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(bytes(pub)));
-        if(!(key instanceof ECPublicKey)||((ECPublicKey)key).getParams().getCurve().getField().getFieldSize()!=256)throw new GeneralSecurityException("Wrong EC key");
+        if(!(key instanceof ECPublicKey))throw new GeneralSecurityException("Wrong EC key");
+        AlgorithmParameters ap=AlgorithmParameters.getInstance("EC");ap.init(new ECGenParameterSpec("secp256r1"));
+        ECParameterSpec want=ap.getParameterSpec(ECParameterSpec.class),actual=((ECPublicKey)key).getParams();
+        require(want.getCurve().equals(actual.getCurve())&&want.getGenerator().equals(actual.getGenerator())&&want.getOrder().equals(actual.getOrder())&&want.getCofactor()==actual.getCofactor(),"Wrong EC curve");
         return key;
     }
     static void uuid(String value)throws Exception{if(!UUID.fromString(value).toString().equals(value))throw new GeneralSecurityException("Invalid ID");}
@@ -46,8 +54,9 @@ final class PairPackets {
         require(p.getInt("v")==1&&type.equals(p.getString("type")),"Wrong message type");
         PublicKey pub=key(p.getString("pub"));Signature sig=Signature.getInstance("SHA256withECDSA");
         sig.initVerify(pub);sig.update(utf(parts[0]+"."+parts[1]));require(sig.verify(bytes(parts[2])),"Invalid signature");
-        Set<String> expected=type.equals("request")?Set.of("v","type","device","nonce","name","pub"):Set.of("v","type","device","request","mother","deployment","epoch","area","pub");
-        require(p.length()==expected.size()&&p.keySet().equals(expected),"Unexpected fields");
+        Set<String> expected=new HashSet<>(type.equals("request")?Arrays.asList("v","type","device","nonce","name","pub"):Arrays.asList("v","type","device","request","mother","deployment","epoch","area","pub"));
+        Set<String> actualFields=new HashSet<>();for(Iterator<String> it=p.keys();it.hasNext();)actualFields.add(it.next());
+        require(p.length()==expected.size()&&actualFields.equals(expected),"Unexpected fields");
         uuid(p.getString("device"));
         if(type.equals("request")){uuid(p.getString("nonce"));String name=p.getString("name");require(!name.trim().isEmpty()&&name.length()<=60,"Invalid device name");}
         else {uuid(p.getString("mother"));uuid(p.getString("deployment"));uuid(p.getString("epoch"));require(!p.getString("mother").equals(p.getString("device")),"Invalid mother");require(p.getString("request").matches("[0-9a-f]{64}"),"Invalid request reference");String area=p.getString("area");require(!area.trim().isEmpty()&&area.length()<=100,"Invalid neighborhood");}
