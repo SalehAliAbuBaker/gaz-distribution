@@ -61,8 +61,15 @@ final class GazStore extends SQLiteOpenHelper {
     synchronized void writeLocalState(String json)throws Exception{
         JSONObject state=pairRead();String role=state.getString("role");
         if(role.equals("pending")||role.equals("distributor"))throw new IllegalStateException("Distributor data is not provisioned");
-        if(role.equals("mother")){JSONObject next=new JSONObject(json);if(!state.getString("deployment").equals(next.getString("deploymentId"))||!state.getString("area").equals(next.getString("area")))throw new IllegalStateException("Mother neighborhood locked");}
+        if(role.equals("mother")){JSONObject next=new JSONObject(json);if(!state.getString("deployment").equals(next.getString("deploymentId"))||!state.getString("area").equals(next.getString("area")))throw new IllegalStateException("Mother neighborhood locked");SyncRules.protectMother(state,new JSONObject(readState()),next);}
         writeState(json);
+    }
+    synchronized void commitSync(JSONObject paired,JSONObject local)throws Exception{
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try{
+            if(local!=null)writeState(local.toString());
+            pairWrite(paired);db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
     }
     synchronized void restoreIndependent(String json)throws Exception{if(!role().equals("independent"))throw new IllegalStateException("Pair recovery not implemented");writeState(json);}
     synchronized boolean admin(String id)throws Exception{

@@ -32,7 +32,7 @@ final class PairPackets {
         String f=fingerprint(pub).substring(0,16).toUpperCase(java.util.Locale.ROOT);
         return f.substring(0,4)+" "+f.substring(4,8)+" "+f.substring(8,12)+" "+f.substring(12,16);
     }
-    private static PublicKey key(String pub)throws Exception{
+    static PublicKey key(String pub)throws Exception{
         if(pub.length()>250)throw new GeneralSecurityException("Public key too long");
         PublicKey key=KeyFactory.getInstance("EC").generatePublic(new X509EncodedKeySpec(bytes(pub)));
         if(!(key instanceof ECPublicKey))throw new GeneralSecurityException("Wrong EC key");

@@ -14,6 +14,7 @@ final class GazPairing {
     private final String device;
     private final PrivateKey secret;
     private final String pub;
+    private final java.security.cert.X509Certificate cert;
     GazPairing(GazStore store,String device)throws Exception{
         this.store=store;this.device=device;PairPackets.uuid(device);
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
@@ -24,10 +25,48 @@ final class GazPairing {
             gen.initialize(new KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_SIGN|KeyProperties.PURPOSE_VERIFY).setAlgorithmParameterSpec(new ECGenParameterSpec("secp256r1")).setDigests(KeyProperties.DIGEST_SHA256).build());
             gen.generateKeyPair();ks.load(null);
         }
-        secret=(PrivateKey)ks.getKey(ALIAS,null);pub=PairPackets.b64(ks.getCertificate(ALIAS).getPublicKey().getEncoded());
+        secret=(PrivateKey)ks.getKey(ALIAS,null);cert=(java.security.cert.X509Certificate)ks.getCertificate(ALIAS);pub=PairPackets.b64(cert.getPublicKey().getEncoded());
         if(!"independent".equals(saved.optString("role","independent"))){
             PairPackets.require(device.equals(saved.getString("device"))&&pub.equals(saved.getString("pub")),"Identity changed");
         }
+    }
+    void allocate(String child,String cycle,java.util.List<String> families)throws Exception{
+        synchronized(store){
+            JSONObject state=status(),local=new JSONObject(store.readState());
+            for(String family:families)SyncRules.grant(state,local,child,cycle,family,secret);
+            store.commitSync(state,null);
+        }
+    }
+    JSONArray allocations()throws Exception{
+        synchronized(store){
+            JSONObject s=status(),g=SyncRules.map(s,"grants"),out=SyncRules.map(s,"outbox"),acked=SyncRules.map(s,"acked"),receipts=SyncRules.map(s,"receipts");JSONArray rows=new JSONArray();
+            boolean mother="mother".equals(s.getString("role"));
+            for(java.util.Iterator<String> it=g.keys();it.hasNext();){
+                String k=it.next();JSONObject p=SyncWire.peek(g.getString(k));
+                JSONObject row=new JSONObject(p.toString()).put("key",k).put("done",mother?receipts.has(k):out.has(k)).put("synced",mother?receipts.has(k):acked.optBoolean(k));
+                if(mother)row.put("distributorName",SyncRules.child(s,p.getString("device")).getString("name"));rows.put(row);
+            }return rows;
+        }
+    }
+    void record(String key,int quantity)throws Exception{
+        synchronized(store){JSONObject state=status();SyncRules.record(state,key,quantity,secret);store.commitSync(state,null);}
+    }
+    GazLan listen(String ip)throws Exception{
+        PairPackets.require("mother".equals(status().getString("role")),"Mother required");return new GazLan(ip,secret,cert);
+    }
+    String respond(String request,String challenge)throws Exception{
+        synchronized(store){
+            JSONObject state=status(),local=new JSONObject(store.readState());PairPackets.require("mother".equals(state.getString("role")),"Mother required");
+            JSONObject p=SyncRules.respond(state,local,request,challenge);String response=SyncWire.sign(p,secret);
+            store.commitSync(state,local);return response;
+        }
+    }
+    void synchronize(String ip)throws Exception{
+        JSONObject before=status();PairPackets.require("distributor".equals(before.getString("role")),"Distributor required");
+        GazLan.connect(ip,before.getString("motherPub"),new GazLan.Exchange(){
+            public String request(String challenge)throws Exception{synchronized(store){return SyncWire.sign(SyncRules.request(status(),challenge,secret),secret);}}
+            public void accept(String response,String challenge)throws Exception{synchronized(store){JSONObject state=status();SyncRules.acceptResponse(state,response,challenge);state.put("lastSync",System.currentTimeMillis());store.commitSync(state,null);}}
+        });
     }
     String fingerprint()throws Exception{return PairPackets.shortFingerprint(pub);}
     JSONObject status()throws Exception{return store.pairRead();}
