@@ -38,10 +38,19 @@ public final class MainActivity extends Activity {
         parent.addView(e); return e;
     }
     private void msg(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
+    private void about(){
+        LinearLayout p=form();
+        label(p,"توزيع الغاز",24);
+        label(p,"الإصدار "+"0.1.0",15);
+        TextView info=label(p,"المطور: صالح علي أبوبكر الخطيب\nالدعم والتواصل (واتساب والهاتف): +967 734 915 588\nالبريد الإلكتروني: saleh0129@gmail.com\nجميع الحقوق محفوظة للمطور.",16);
+        info.setTextIsSelectable(true);
+        new AlertDialog.Builder(this).setTitle("حول التطبيق").setView(p).setPositiveButton("إغلاق",null).show();
+    }
     private void setup(){
         page(); label(root,"توزيع الغاز",26); label(root,"إعداد الحارة • نسخة محلية تجريبية 0.1.0",17);
         EditText area=field(root,"اسم الحارة",false); area.setText("حارة الروضة");
         label(root,"للاختبار ببيانات وهمية فقط. ربط الموزعين والنسخ الاحتياطي غير متاحين بعد.",15);
+        button(root,"حول التطبيق",this::about);
         button(root,"إنشاء المنظومة المحلية",()->{String s=area.getText().toString().trim(); if(s.isEmpty()){msg("أدخل اسم الحارة");return;} prefs.edit().putString("area",s).apply();home();});
     }
     private void home(){
@@ -52,6 +61,7 @@ public final class MainActivity extends Activity {
         button(root,"إضافة أسرة",this::addFamily);
         if(cycle==null) button(root,"فتح دورة توزيع",this::openCycle); else button(root,"إغلاق الدورة",this::confirmClose);
         button(root,"سجل الدورات والإحصائيات",this::history);
+        button(root,"حول التطبيق",this::about);
         search=field(root,"ابحث باسم الأسرة أو رقمها",false);
         rows=new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL); root.addView(rows);
         search.addTextChangedListener(new TextWatcher(){
