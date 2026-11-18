@@ -81,6 +81,12 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String distributorSession(){try{JSONObject u=sessionUser();return u==null?"":DistributorUsers.publicUser(u).toString();}catch(Exception e){return "";}}
         @JavascriptInterface public void distributorLogout(){if(isDistributor())distributorSessionId=null;}
         @JavascriptInterface public void distributorAction(String action){runOnUiThread(()->openDistributorAction(action));}
+        @JavascriptInterface public String distributorSearchRows(){
+            try{JSONObject user=sessionUser();if(!DistributorUsers.allowed(user,"view")&&!DistributorUsers.allowed(user,"deliver"))return "";JSONArray all=pairing.allocations(),rows=new JSONArray();
+                for(int i=0;i<all.length();i++){JSONObject row=all.getJSONObject(i),safe=new JSONObject();for(String k:new String[]{"key","name","no","house","square","cycleTitle","done","synced"})if(row.has(k))safe.put(k,row.get(k));rows.put(safe);}return rows.toString();
+            }catch(Exception e){return "";}
+        }
+        @JavascriptInterface public void openDistributorSearchResult(String key){runOnUiThread(()->showDistributorSearchResult(key));}
         @JavascriptInterface public void centralAccounts(String admin){runOnUiThread(()->centralDevices(admin));}
         @JavascriptInterface public void chooseLoginRole(String admin,String selected){runOnUiThread(()->setupLoginRole(admin,selected));}
         @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
@@ -238,6 +244,17 @@ public final class MainActivity extends Activity {
             ScrollView sc=new ScrollView(this);sc.addView(p);new AlertDialog.Builder(this).setTitle("حالة التخصيصات").setView(sc).setPositiveButton("إغلاق",null).show();
         }catch(Exception e){msg("تعذر عرض التخصيصات");}
     }
+    private void showDistributorSearchResult(String key){
+        try{JSONObject user=sessionUser();boolean deliver=DistributorUsers.allowed(user,"deliver");
+            if(!deliver&&!DistributorUsers.allowed(user,"view")){msg("لا توجد صلاحية للبحث");return;}
+            JSONArray all=pairing.allocations();JSONObject found=null;for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);if(r.getString("key").equals(key)){found=r;break;}}
+            if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
+            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no")+"\nالمنزل: "+row.getString("house")+"\nمربع: "+row.optString("square","—")+"\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+"\n"+deliveryDescription(row));
+            AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
+            if(deliver&&!row.getBoolean("done"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
+            d.show();
+        }catch(Exception e){msg("تعذر فتح بيانات المستفيد");}
+    }
     private void openDistributorAction(String action){
         try{JSONObject user=sessionUser();if(user==null){msg("سجل الدخول أولًا");return;}String id=user.getString("id");
             switch(action){
@@ -342,7 +359,7 @@ public final class MainActivity extends Activity {
     private void recordDelivery(String admin,JSONObject row){
         if(!distributorAllowed("deliver"))return;
         EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+row.optInt("maxQty"));
-        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" أسطوانة. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
+        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" أسطوانة. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-search-refresh'))",null);distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
     }
     private void chooseLan(String admin){
         if(!adminAllowed(admin))return;
