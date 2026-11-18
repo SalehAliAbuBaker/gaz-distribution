@@ -4,11 +4,11 @@ const id=x=>document.getElementById(x);
 const LIB='./vendor/ratib-pdfmake-rtl-0.2.23.js';
 let enginePromise,fontsPromise,opened=false,token=0,prepared=null,snapshot=null,scale=1,pinch=null,historyOwned=false;
 const plain=v=>String(v??'').replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,'').trim();
-function capture(d,area,issued){return {cycle:{title:plain(d.c.title),docNo:plain(d.c.docNo)||'-',date:plain(d.c.date),donor:plain(d.c.donor)||'-',details:plain(d.c.details)||'-'},area:plain(area),issued,mode:d.mode,rows:d.rows.map(r=>({name:plain(r.f.name),home:plain(r.f.house)+' / '+plain(r.f.area||area),members:plain(r.f.members),category:plain(r.f.categories)||'-',quantity:Number(r.d?.q)||0}))}}
+function capture(d,area,issued){return {cycle:{title:plain(d.c.title),docNo:plain(d.c.docNo)||'-',date:plain(d.c.date),donor:plain(d.c.donor)||'-',details:plain(d.c.details)||'-'},area:plain(area),issued,mode:d.mode,rows:d.rows.map(r=>({name:plain(r.f.name),home:plain(r.f.house)+' / '+(plain(r.f.square)||'—')+' / '+plain(r.f.area||area),members:plain(r.f.members),category:plain(r.f.categories)||'-',quantity:Number(r.d?.q)||0}))}}
 const titleOf=s=>s.mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع الغاز';
 const totalOf=s=>s.rows.reduce((sum,r)=>sum+r.quantity,0);
 const metaRows=s=>[['رقم المستند',s.cycle.docNo,'تاريخ الدورة',s.cycle.date],['مسمى الدورة',s.cycle.title,'المسؤول / المورد',s.cycle.donor],['عدد الأسر',String(s.rows.length),'تاريخ الإصدار',s.issued]];
-const heads=['م','المستفيد','المنزل / المنطقة','الأفراد','الفئة','الكمية'];
+const heads=['م','المستفيد','المنزل / المربع / المنطقة','الأفراد','الفئة','الكمية'];
 const fields=(r,i)=>[String(i+1),r.name,r.home,r.members,r.category,r.quantity?String(r.quantity):'—'];
 const filename=s=>('كشف_توزيع_الغاز_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
 function definition(s){
