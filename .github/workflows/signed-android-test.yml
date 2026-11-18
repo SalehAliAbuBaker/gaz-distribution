@@ -34,7 +34,7 @@ jobs:
         env:
           GAZ_KEYSTORE_BASE64: ${{ secrets.GAZ_KEYSTORE_BASE64 }}
           GAZ_KEYSTORE_PASSWORD: ${{ secrets.GAZ_KEYSTORE_PASSWORD }}
-          GAZ_SIGNER_SHA256: ${{ vars.GAZ_SIGNER_SHA256 }}
+          GAZ_SIGNER_SHA256: '8d44eddd980877c21f3c8ecafc456f7ebeafbeb9c1f4e169e9f6d50377df5bb6'
         run: |
           set -euo pipefail
           umask 077
