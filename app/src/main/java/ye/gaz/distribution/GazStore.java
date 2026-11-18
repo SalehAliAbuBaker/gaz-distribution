@@ -62,11 +62,11 @@ final class GazStore extends SQLiteOpenHelper {
     synchronized String readState() throws Exception {
         Map<String,String> rows=readRows(getReadableDatabase()); if(rows.isEmpty())return "null";
         String meta=rows.remove(key("meta","state"));if(meta==null)throw new IllegalStateException("Metadata missing");
-        JSONObject state=new JSONObject(meta);for(String kind:KINDS){JSONArray a=new JSONArray();for(Map.Entry<String,String> e:rows.entrySet())if(e.getKey().startsWith(kind+"\u0000"))a.put(new JSONObject(e.getValue()));state.put(kind,a);}
+        JSONObject state=new JSONObject(meta);JSONObject order=state.optJSONObject("__gazOrder");state.remove("__gazOrder");for(String kind:KINDS){JSONArray a=new JSONArray();JSONArray ids=order==null?null:order.optJSONArray(kind);if(ids!=null){for(int i=0;i<ids.length();i++){String row=rows.remove(key(kind,ids.getString(i)));if(row==null)throw new IllegalStateException("Record ordering invalid");a.put(new JSONObject(row));}}else{for(Map.Entry<String,String> e:rows.entrySet())if(e.getKey().startsWith(kind+"\u0000"))a.put(new JSONObject(e.getValue()));}state.put(kind,a);}if(order!=null&&!rows.isEmpty())throw new IllegalStateException("Extra records");
         flatten(state);return state.toString();
     }
     private static String id(JSONObject x,String k) throws JSONException {
-        String s=x.getString(k);if(s.isEmpty()||s.length()>150||s.indexOf('\u0000')>=0)throw new JSONException("Invalid identifier");return s;
+        String s=x.getString(k);if(s.isEmpty()||s.length()>150||s.indexOf('\u0000')>=0||s.indexOf('/')>=0)throw new JSONException("Invalid identifier");return s;
     }
     private static Map<String,String> flatten(JSONObject state) throws Exception {
         if(state.getString("area").trim().isEmpty()||state.getLong("n")<0)throw new JSONException("Invalid area");
@@ -88,7 +88,7 @@ final class GazStore extends SQLiteOpenHelper {
                 if(rows.put(key(kind,rid),x.toString())!=null)throw new JSONException("Duplicate record");
             }
         }
-        JSONObject meta=new JSONObject(state.toString());for(String kind:KINDS)meta.remove(kind);
+        JSONObject meta=new JSONObject(state.toString());JSONObject order=new JSONObject();for(String kind:KINDS){JSONArray ids=new JSONArray();JSONArray list=state.getJSONArray(kind);for(int i=0;i<list.length();i++){JSONObject x=list.getJSONObject(i);ids.put(kind.equals("deliveries")?id(x,"c")+"/"+id(x,"f"):id(x,"id"));}order.put(kind,ids);meta.remove(kind);}meta.put("__gazOrder",order);
         rows.put(key("meta","state"),meta.toString());return rows;
     }
     synchronized void writeState(String json) throws Exception {
