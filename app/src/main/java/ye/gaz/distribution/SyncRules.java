@@ -26,7 +26,7 @@ final class SyncRules {
         JSONObject c=find(local.getJSONArray("cycles"),cycle),f=find(local.getJSONArray("families"),family);
         require(c!=null&&f!=null&&!c.optBoolean("closed")&&delivery(local,cycle,family)==null,"Unavailable family/cycle");
         String k=key(cycle,family);JSONObject grants=map(state,"grants");require(!grants.has(k),"Already allocated");require(grants.length()<20000,"Test grant limit");
-        JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(c.getInt("quota")))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
+        JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(AidQuota.forFamily(c,f)))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
         String packet=SyncWire.sign(p,secret);grants.put(k,packet);return packet;
     }
     static JSONObject grantPayload(JSONObject s,String packet,String device)throws Exception{
@@ -97,6 +97,7 @@ final class SyncRules {
             JSONObject fb=find(old.getJSONArray("families"),f),fa=find(next.getJSONArray("families"),f);
             require(before!=null&&after!=null&&fb!=null&&fa!=null,"Allocated cycle/family cannot be removed");
             for(String field:new String[]{"title","date","quota"})require(String.valueOf(before.get(field)).equals(String.valueOf(after.get(field))),"Allocated cycle cannot be changed");
+            for(String field:new String[]{"aidTwoAbove","aidThreeAbove"})require(AidQuota.threshold(before,field)==AidQuota.threshold(after,field),"Allocated cycle aid rules cannot be changed");
             for(String field:new String[]{"name","no"})require(String.valueOf(fb.get(field)).equals(String.valueOf(fa.get(field))),"Allocated family cannot be changed");
             require(!after.optBoolean("closed")||MotherDelivery.resolved(s,k),"Outstanding allocation");
             JSONObject prev=delivery(old,c,f),cur=delivery(next,c,f);

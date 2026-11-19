@@ -235,7 +235,7 @@ public final class MainActivity extends Activity {
             AllocationSelection selection=new AllocationSelection(data,SyncRules.map(state,"grants"),cycle);
             if(selection.total()==0){msg("لا توجد أسر متاحة للتخصيص في هذه الدورة");return;}
             String childName=SyncRules.child(state,child).getString("name");
-            LinearLayout p=pairLayout();pairText(p,"الموزع: "+childName+" | "+c.getString("title")+"\nالاستحقاق لكل أسرة: "+c.getInt("quota")+" أسطوانة");
+            LinearLayout p=pairLayout();pairText(p,"الموزع: "+childName+" | "+c.getString("title")+"\nالاستحقاق لكل أسرة: "+"تحسب الكمية بحسب عدد أفراد الأسرة");
             EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث بالاسم أو الرقم أو رابط الأسرة أو المربع");p.addView(search);
             java.util.ArrayList<String> squareKeys=new java.util.ArrayList<>(),squareNames=new java.util.ArrayList<>();
             squareKeys.add(null);squareNames.add("جميع المستفيدين المتاحين ("+selection.total()+")");
@@ -253,7 +253,7 @@ public final class MainActivity extends Activity {
                 public long getItemId(int i){return i;}
                 public android.view.View getView(int pos,android.view.View reused,android.view.ViewGroup parent){
                     CheckedTextView v=reused instanceof CheckedTextView?(CheckedTextView)reused:(CheckedTextView)getLayoutInflater().inflate(android.R.layout.simple_list_item_multiple_choice,parent,false);
-                    JSONObject f=visible.get(pos);v.setText(AllocationSelection.label(f));v.setChecked(selection.checked(f.optString("id")));v.setTextSize(15);v.setSingleLine(false);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);return v;
+                    JSONObject f=visible.get(pos);v.setText(AllocationSelection.label(f)+" | الاستحقاق: "+AidQuota.forFamily(c,f));v.setChecked(selection.checked(f.optString("id")));v.setTextSize(15);v.setSingleLine(false);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);return v;
                 }
             };
             list.setAdapter(adapter);
@@ -291,7 +291,7 @@ public final class MainActivity extends Activity {
             if(!java.util.Arrays.asList("recall","add","edit","delete").contains(action))return;
             LinearLayout p=pairLayout();pairText(p,f.getString("name")+" | "+c.getString("title"));
             pairText(p,"recall".equals(action)?"سيُقفل التسليم على الموزع عند المزامنة. يجب تأكيد الإقفال بمزامنة ثانية قبل أن تتسلم الأم الصلاحية.":"سيبقى الإيصال الأصلي محفوظًا رقابيًا. تنتقل النتيجة إلى الموزع عند المزامنة.");
-            EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+(d==null?c.getInt("quota"):d.getInt("q")));
+            EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+(d==null?grant.getInt("maxQty"):d.getInt("q")));
             boolean needsQty="add".equals(action)||"edit".equals(action);if(needsQty){qty.setHint("الكمية");p.addView(qty);}
             EditText reason=new EditText(this);reason.setHint("سبب الإجراء (مطلوب)");reason.setMaxLines(3);reason.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});p.addView(reason);
             String title="recall".equals(action)?"استرداد صلاحية التسليم":"delete".equals(action)?"حذف حركة التسليم":"edit".equals(action)?"تعديل حركة التسليم":"إضافة تسليم من الأم";
@@ -334,7 +334,7 @@ public final class MainActivity extends Activity {
             if(!deliver&&!DistributorUsers.allowed(user,"view")){msg("لا توجد صلاحية للبحث");return;}
             JSONArray all=pairing.allocations();JSONObject found=null;for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);if(r.getString("key").equals(key)){found=r;break;}}
             if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
-            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" أسطوانة");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
+            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" عطية");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
             AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
             if(deliver&&!row.getBoolean("done")&&!row.optBoolean("locked"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
             d.show();
@@ -377,8 +377,8 @@ public final class MainActivity extends Activity {
     private void distributorReports(){
         try{JSONArray all=pairing.allocations();java.util.LinkedHashMap<String,int[]> sums=new java.util.LinkedHashMap<>();java.util.LinkedHashMap<String,String> labels=new java.util.LinkedHashMap<>();
             for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);String cycle=r.getString("cycle");labels.put(cycle,r.getString("cycleTitle")+" · "+r.optString("cycleDate"));int[] n=sums.get(cycle);if(n==null){n=new int[5];sums.put(cycle,n);}n[0]++;if(r.optBoolean("done")){n[1]++;n[2]+=r.optInt("q");if(!r.optBoolean("synced"))n[3]++;}else n[4]++;}
-            StringBuilder out=new StringBuilder("رفد — كشف توزيع الغاز — "+pairing.status().getString("area"));
-            for(String cycle:sums.keySet()){int[] n=sums.get(cycle);out.append("\n\n").append(labels.get(cycle)).append("\nالأسر المخصصة: ").append(n[0]).append(" | المستلمة: ").append(n[1]).append(" | المتبقية: ").append(n[4]).append("\nالأسطوانات المسلمة: ").append(n[2]).append(" | حركات بانتظار المزامنة: ").append(n[3]);}
+            StringBuilder out=new StringBuilder("رفد — كشف توزيع المساعدات — "+pairing.status().getString("area"));
+            for(String cycle:sums.keySet()){int[] n=sums.get(cycle);out.append("\n\n").append(labels.get(cycle)).append("\nالأسر المخصصة: ").append(n[0]).append(" | المستلمة: ").append(n[1]).append(" | المتبقية: ").append(n[4]).append("\nالعطايا المسلّمة: ").append(n[2]).append(" | حركات بانتظار المزامنة: ").append(n[3]);}
             if(sums.isEmpty())out.append("\nلا توجد تخصيصات");final String text=out.toString();
             ScrollView sc=new ScrollView(this);LinearLayout p=pairLayout();pairText(p,text);sc.addView(p);
             AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle("الكشوف والتقارير").setView(sc).setPositiveButton("إغلاق",null);
@@ -435,7 +435,7 @@ public final class MainActivity extends Activity {
     private void recordDelivery(String admin,JSONObject row){
         if(!distributorAllowed("deliver"))return;
         EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+row.optInt("maxQty"));
-        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" أسطوانة. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-search-refresh'))",null);distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
+        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" عطية. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-search-refresh'))",null);distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
     }
     private void chooseLan(String admin){
         if(!adminAllowed(admin))return;
@@ -634,6 +634,9 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());b.putString("scanMode",scanMode);b.putString("scanAdmin",scanAdmin);b.putString("restoreAdmin",restoreAdmin);b.putString("excelAdmin",excelAdmin);}
     private void msg(String s){runOnUiThread(()->Toast.makeText(this,s,Toast.LENGTH_LONG).show());}
-    @Override public void onBackPressed(){if(web!=null){web.evaluateJavascript("(function(){let p=document.getElementById('gazPreview');if(p&&!p.hidden){document.getElementById('gazPreviewClose').click();return;}if(typeof activeUser!=='undefined'&&activeUser&&current!=='home'){show('home');return;}alert('للخروج استخدم شاشة التطبيقات أو تسجيل الخروج.');})()",null);}else super.onBackPressed();}
+    private boolean backCheckPending=false;
+    private AlertDialog exitDialog;
+    private void confirmExit(){if(isFinishing()||isDestroyed()||(exitDialog!=null&&exitDialog.isShowing()))return;exitDialog=new AlertDialog.Builder(this).setTitle("تأكيد الخروج").setMessage("هل تريد الخروج من تطبيق رفد؟").setNegativeButton("البقاء",null).setPositiveButton("خروج",(dialog,which)->finishAndRemoveTask()).create();exitDialog.show();}
+    @Override public void onBackPressed(){if(backCheckPending||(exitDialog!=null&&exitDialog.isShowing()))return;if(web==null){confirmExit();return;}backCheckPending=true;web.evaluateJavascript("(function(){try{return typeof window.rafdHandleBack==='function'&&window.rafdHandleBack();}catch(e){return false;}})()",result->{backCheckPending=false;if(!"true".equals(result))confirmExit();});}
     @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}closeLan();network.shutdownNow();workers.shutdown();super.onDestroy();}
 }

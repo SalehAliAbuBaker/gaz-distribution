@@ -5,12 +5,12 @@ const LIB='./vendor/ratib-pdfmake-rtl-0.2.23.js';
 let enginePromise,fontsPromise,opened=false,token=0,prepared=null,snapshot=null,scale=1,pinch=null,historyOwned=false;
 const plain=v=>String(v??'').replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,'').trim();
 function capture(d,area,issued,identity={}){return {identity:{entity:plain(identity.entity),letterhead:plain(identity.letterhead),address:plain(identity.address),signatures:identity.signatures!==false,preparedRole:plain(identity.preparedRole)||'إعداد المختص',preparedName:plain(identity.preparedName),approvedRole:plain(identity.approvedRole)||'اعتماد المسؤول',approvedName:plain(identity.approvedName)},cycle:{title:plain(d.c.title),docNo:plain(d.c.docNo)||'-',date:plain(d.c.date),donor:plain(d.c.donor)||'-',details:plain(d.c.details)||'-'},area:plain(area),issued,mode:d.mode,rows:d.rows.map(r=>({name:plain(r.f.name),home:(plain(r.f.house)||'—')+' / '+(plain(r.f.square)||'—')+' / '+plain(r.f.area||area),members:plain(r.f.members),category:plain(r.f.categories)||'-',quantity:Number(r.d?.q)||0}))}}
-const titleOf=s=>s.mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع الغاز';
+const titleOf=s=>s.mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع المساعدات';
 const totalOf=s=>s.rows.reduce((sum,r)=>sum+r.quantity,0);
 const metaRows=s=>[['رقم المستند',s.cycle.docNo,'تاريخ الدورة',s.cycle.date],['مسمى الدورة',s.cycle.title,'المسؤول / المورد',s.cycle.donor],['عدد الأسر',String(s.rows.length),'تاريخ الإصدار',s.issued]];
 const heads=['م','المستفيد','رابط الأسرة/رقم المنزل / المربع / المنطقة','الأفراد','الفئة','الكمية'];
 const fields=(r,i)=>[String(i+1),r.name,r.home,r.members,r.category,r.quantity?String(r.quantity):'—'];
-const filename=s=>('رفد_كشف_توزيع_الغاز_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
+const filename=s=>('رفد_كشف_توزيع_المساعدات_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
 function definition(s){
  const cell=(v,extra={})=>({text:String(v??''),alignment:'right',...extra});
  const grid={hLineWidth:()=>.5,vLineWidth:()=>.5,hLineColor:()=> '#94a3b8',vLineColor:()=> '#94a3b8',paddingLeft:()=>4,paddingRight:()=>4,paddingTop:()=>4,paddingBottom:()=>4};
@@ -19,7 +19,7 @@ function definition(s){
  meta.splice(2,0,[cell(s.cycle.details,{colSpan:3}),{}, {},cell('التفاصيل',{bold:true,fillColor:'#f1f5f9'})]);
  const body=[heads.slice().reverse().map(v=>cell(v,{bold:true,alignment:'center',fillColor:'#e2e8f0'})),...s.rows.map((r,i)=>fields(r,i).reverse().map((v,j)=>cell(v,{alignment:[0,2,5].includes(j)?'center':'right',bold:j===0})))];
  if(!s.rows.length)body.push([cell('لا توجد أسر مطابقة',{colSpan:6,alignment:'center'}),{},{},{},{},{}]);
- body.push([cell(totalOf(s),{bold:true,alignment:'center',fillColor:'#f1f5f9'}),cell('إجمالي الأسطوانات',{colSpan:5,bold:true,fillColor:'#f1f5f9'}),{},{},{},{}]);
+ body.push([cell(totalOf(s),{bold:true,alignment:'center',fillColor:'#f1f5f9'}),cell('إجمالي العطايا',{colSpan:5,bold:true,fillColor:'#f1f5f9'}),{},{},{},{}]);
  return {pageSize:'A4',pageOrientation:'portrait',pageMargins:[28,28,28,34],defaultStyle:{font:'Tajawal',fontSize:9,color:'#111827',alignment:'right',lineHeight:1.12},info:{title:titleOf(s),creator:'رفد'},content:[
  {text:'بسم الله الرحمن الرحيم',alignment:'center',bold:true,fontSize:12,margin:[0,0,0,3]},
  ...((s.identity.entity||s.identity.letterhead||s.identity.address)?[{columns:[{width:'*',text:s.identity.address,alignment:'left',fontSize:10},{width:'*',stack:[{text:s.identity.entity,bold:true,fontSize:12},{text:s.identity.letterhead,fontSize:10}],alignment:'right'}],columnGap:12,margin:[0,2,0,6]}]:[]),

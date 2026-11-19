@@ -88,4 +88,13 @@ public class SyncRulesTest {
         next=SyncRules.copy(f.local);next.getJSONArray("families").getJSONObject(0).put("house","");SyncRules.protectMother(f.ms,f.local,next);f.local=next;f.sync();
         assertEquals("",SyncRules.map(f.as,"houseLabels").getString(f.k));assertEquals(grant,SyncRules.map(f.as,"grants").getString(f.k));assertEquals(receipt,SyncRules.map(f.ms,"receipts").getString(f.k));assertEquals(1,f.local.getJSONArray("deliveries").length());
     }
+    @Test public void familyTierSignedGrantAndFrozenRules()throws Exception{
+        Fixture f=new Fixture();JSONObject c=f.local.getJSONArray("cycles").getJSONObject(0);
+        c.put("quota",1).put("aidTwoAbove","5").put("aidThreeAbove","9");f.local.getJSONArray("families").getJSONObject(0).put("members",10);f.local.getJSONArray("families").getJSONObject(1).put("members",6);
+        assertEquals(3,SyncWire.peek(f.grant()).getInt("maxQty"));
+        assertEquals(2,SyncWire.peek(SyncRules.grant(f.ms,f.local,f.two,f.cycle,f.other,f.m.getPrivate())).getInt("maxQty"));
+        JSONObject changed=SyncRules.copy(f.local);changed.getJSONArray("cycles").getJSONObject(0).put("aidThreeAbove","10");
+        assertThrows(Exception.class,()->SyncRules.protectMother(f.ms,f.local,changed));
+        f.sync();assertThrows(Exception.class,()->SyncRules.record(f.as,f.k,4,f.a.getPrivate()));SyncRules.record(f.as,f.k,3,f.a.getPrivate());f.sync();assertEquals(3,f.local.getJSONArray("deliveries").getJSONObject(0).getInt("q"));
+    }
 }
