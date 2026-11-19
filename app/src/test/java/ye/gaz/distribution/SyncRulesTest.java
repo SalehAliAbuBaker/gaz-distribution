@@ -81,4 +81,11 @@ public class SyncRulesTest {
         assertEquals(2,MotherDelivery.batch(f.ms,f.local,f.cycle,"add",new JSONObject().put(f.family,2).put(f.other,1),"مدير","تسليم جماعي"));f.sync();
         assertEquals(2,f.local.getJSONArray("deliveries").length());assertEquals(2,MotherDelivery.control(f.as,f.k).getJSONObject("delivery").getInt("q"));
     }
+    @Test public void familyLinkChangeOnAllocatedFamilyPreservesReceipt()throws Exception{
+        Fixture f=new Fixture();String grant=f.grant();f.sync();SyncRules.record(f.as,f.k,1,f.a.getPrivate());f.sync();
+        String receipt=SyncRules.map(f.ms,"receipts").getString(f.k);JSONObject next=SyncRules.copy(f.local);next.getJSONArray("families").getJSONObject(0).put("house","أسرة آل سالم");
+        SyncRules.protectMother(f.ms,f.local,next);f.local=next;f.sync();assertEquals("أسرة آل سالم",SyncRules.map(f.as,"houseLabels").getString(f.k));
+        next=SyncRules.copy(f.local);next.getJSONArray("families").getJSONObject(0).put("house","");SyncRules.protectMother(f.ms,f.local,next);f.local=next;f.sync();
+        assertEquals("",SyncRules.map(f.as,"houseLabels").getString(f.k));assertEquals(grant,SyncRules.map(f.as,"grants").getString(f.k));assertEquals(receipt,SyncRules.map(f.ms,"receipts").getString(f.k));assertEquals(1,f.local.getJSONArray("deliveries").length());
+    }
 }

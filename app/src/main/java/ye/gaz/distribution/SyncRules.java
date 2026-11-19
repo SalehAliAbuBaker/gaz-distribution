@@ -73,16 +73,17 @@ final class SyncRules {
         CentralUsers.observe(s,device,p);boolean policyOnly=p.optBoolean("policyOnly",false);JSONArray incoming=p.getJSONArray("receipts");require(incoming.length()<=20000&&(!policyOnly||incoming.length()==0),"Invalid receipts");
         for(int i=0;i<incoming.length();i++)importReceipt(s,local,device,incoming.getString(i));
         MotherDelivery.acceptReturns(s,device,p,policyOnly);
-        JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts"),squares=new JSONObject(),controls=new JSONObject();
+        JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts"),squares=new JSONObject(),houses=new JSONObject(),controls=new JSONObject();
         if(!policyOnly)for(Iterator<String> it=g.keys();it.hasNext();){String k=it.next(),packet=g.getString(k);JSONObject gp=SyncWire.peek(packet);
-            if(device.equals(gp.getString("device"))){grants.put(packet);JSONObject family=find(local.getJSONArray("families"),gp.getString("family"));require(family!=null,"Missing allocated family");squares.put(k,family.optString("square",""));if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));JSONObject ctrl=MotherDelivery.response(s,local,k);if(ctrl!=null)controls.put(k,ctrl);}}
-        JSONObject result=base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares).put("deliveryControls",controls);JSONObject accounts=CentralUsers.policy(s,device);if(accounts!=null)result.put("accountPolicy",accounts);return result;
+            if(device.equals(gp.getString("device"))){grants.put(packet);JSONObject family=find(local.getJSONArray("families"),gp.getString("family"));require(family!=null,"Missing allocated family");squares.put(k,family.optString("square",""));houses.put(k,family.optString("house",""));if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));JSONObject ctrl=MotherDelivery.response(s,local,k);if(ctrl!=null)controls.put(k,ctrl);}}
+        JSONObject result=base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares).put("houses",houses).put("deliveryControls",controls);JSONObject accounts=CentralUsers.policy(s,device);if(accounts!=null)result.put("accountPolicy",accounts);return result;
     }
     static void acceptResponse(JSONObject s,String packet,String challenge)throws Exception{
         JSONObject p=SyncWire.verify(packet,s.getString("motherPub"),"result");context(s,p,s.getString("device"));require(challenge.equals(p.getString("challenge")),"Stale response");
         CentralUsers.accept(s,p);JSONArray grants=p.getJSONArray("grants"),acks=p.getJSONArray("acks");require(grants.length()<=20000&&acks.length()<=20000,"Too many records");
         for(int i=0;i<grants.length();i++)acceptGrant(s,grants.getString(i));
         MotherDelivery.acceptControls(s,p);
+        if(p.has("houses")){JSONObject incoming=p.getJSONObject("houses"),known=map(s,"grants"),labels=map(s,"houseLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&((String)value).length()<=200,"Invalid family link");labels.put(k,value);}}
         if(p.has("squares")){JSONObject incoming=p.getJSONObject("squares"),known=map(s,"grants"),labels=map(s,"squareLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&((String)value).length()<=80,"Invalid square label");labels.put(k,value);}}
         Set<String> ids=new HashSet<>();for(int i=0;i<acks.length();i++)ids.add(acks.getString(i));
         JSONObject out=map(s,"outbox"),accepted=map(s,"acked");
@@ -96,7 +97,7 @@ final class SyncRules {
             JSONObject fb=find(old.getJSONArray("families"),f),fa=find(next.getJSONArray("families"),f);
             require(before!=null&&after!=null&&fb!=null&&fa!=null,"Allocated cycle/family cannot be removed");
             for(String field:new String[]{"title","date","quota"})require(String.valueOf(before.get(field)).equals(String.valueOf(after.get(field))),"Allocated cycle cannot be changed");
-            for(String field:new String[]{"name","house","no"})require(String.valueOf(fb.get(field)).equals(String.valueOf(fa.get(field))),"Allocated family cannot be changed");
+            for(String field:new String[]{"name","no"})require(String.valueOf(fb.get(field)).equals(String.valueOf(fa.get(field))),"Allocated family cannot be changed");
             require(!after.optBoolean("closed")||MotherDelivery.resolved(s,k),"Outstanding allocation");
             JSONObject prev=delivery(old,c,f),cur=delivery(next,c,f);
             if(MotherDelivery.resolved(s,k)){require(CentralUsers.same(prev,cur),"Synchronized delivery protected");}

@@ -26,7 +26,7 @@ final class AllocationSelection {
     Map<String,String> squares(){
         Map<String,String> out=new TreeMap<>();for(JSONObject f:available){String v=f.optString("square","").trim();out.putIfAbsent(norm(v),v.isEmpty()?"غير محدد":v);}return out;
     }
-    static String label(JSONObject f){String sq=f.optString("square","").trim();return f.optInt("no")+" · "+f.optString("name")+"\nمنزل "+f.optString("house")+" | مربع: "+(sq.isEmpty()?"غير محدد":sq);}
+    static String label(JSONObject f){String sq=f.optString("square","").trim();return f.optInt("no")+" · "+f.optString("name")+"\nرابط الأسرة: "+(f.optString("house").isEmpty()?"—":f.optString("house"))+" | مربع: "+(sq.isEmpty()?"غير محدد":sq);}
     List<JSONObject> visible(String query,String square){
         String q=norm(query);List<JSONObject> out=new ArrayList<>();for(JSONObject f:available){
             if(square!=null&&!square.equals(norm(f.optString("square",""))))continue;

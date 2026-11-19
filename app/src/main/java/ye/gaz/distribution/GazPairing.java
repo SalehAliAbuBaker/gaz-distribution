@@ -56,11 +56,11 @@ final class GazPairing {
     JSONArray allocations()throws Exception{
         synchronized(store){
             JSONObject s=status(),g=SyncRules.map(s,"grants"),out=SyncRules.map(s,"outbox"),acked=SyncRules.map(s,"acked"),receipts=SyncRules.map(s,"receipts");JSONArray rows=new JSONArray();
-            boolean mother="mother".equals(s.getString("role"));JSONObject local=mother?new JSONObject(store.readState()):null;JSONObject labels=SyncRules.map(s,"squareLabels");
+            boolean mother="mother".equals(s.getString("role"));JSONObject local=mother?new JSONObject(store.readState()):null;JSONObject labels=SyncRules.map(s,"squareLabels"),houses=SyncRules.map(s,"houseLabels");
             for(java.util.Iterator<String> it=g.keys();it.hasNext();){
                 String k=it.next();JSONObject p=SyncWire.peek(g.getString(k));
                 JSONObject row=new JSONObject(p.toString()).put("key",k).put("done",mother?receipts.has(k):out.has(k)).put("synced",mother?receipts.has(k):acked.optBoolean(k));
-                if(mother){row.put("distributorName",SyncRules.child(s,p.getString("device")).getString("name"));JSONObject f=SyncRules.find(local.getJSONArray("families"),p.getString("family"));row.put("square",f==null?"":f.optString("square",""));}else row.put("square",labels.optString(k,p.optString("square","")));
+                if(mother){row.put("distributorName",SyncRules.child(s,p.getString("device")).getString("name"));JSONObject f=SyncRules.find(local.getJSONArray("families"),p.getString("family"));row.put("square",f==null?"":f.optString("square","")).put("house",f==null?"":f.optString("house",""));}else row.put("square",labels.optString(k,p.optString("square",""))).put("house",houses.optString(k,p.optString("house","")));
                 JSONObject moves=mother?receipts:out;if(moves.has(k)){JSONObject receipt=SyncWire.peek(moves.getString(k));row.put("q",receipt.getInt("q")).put("at",receipt.getString("at")).put("operator",receipt.optString("operator",""));}
                 JSONObject ctl=MotherDelivery.control(s,k);
                 if(mother){JSONObject d=SyncRules.delivery(local,p.getString("cycle"),p.getString("family"));

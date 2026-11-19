@@ -24,4 +24,9 @@ public class BeneficiaryExcelTest {
         JSONArray a=BeneficiaryExcel.read(populated(100));assertEquals(100,a.length());assertEquals("001",a.getJSONObject(0).getString("house"));assertEquals("5",a.getJSONObject(0).getString("members"));
         JSONObject data=new JSONObject().put("n",0).put("families",new JSONArray());assertEquals(100,BeneficiaryExcel.append(data,a));assertEquals(100,data.getLong("n"));assertThrows(Exception.class,()->BeneficiaryExcel.read(populated(101)));assertThrows(Exception.class,()->BeneficiaryExcel.numericText("1e10000000"));
     }
+    @Test public void familyLinkOptionalAndText()throws Exception{
+        JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",0);
+        JSONArray rows=new JSONArray().put(row(2,"اسم أول").put("house","")).put(row(3,"اسم ثان").put("house","أسرة آل سالم"));
+        assertEquals(2,BeneficiaryExcel.append(data,rows));assertEquals("",data.getJSONArray("families").getJSONObject(0).getString("house"));assertEquals("أسرة آل سالم",data.getJSONArray("families").getJSONObject(1).getString("house"));
+    }
 }

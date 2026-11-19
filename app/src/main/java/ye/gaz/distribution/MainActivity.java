@@ -234,7 +234,7 @@ public final class MainActivity extends Activity {
             if(selection.total()==0){msg("لا توجد أسر متاحة للتخصيص في هذه الدورة");return;}
             String childName=SyncRules.child(state,child).getString("name");
             LinearLayout p=pairLayout();pairText(p,"الموزع: "+childName+" | "+c.getString("title")+"\nالاستحقاق لكل أسرة: "+c.getInt("quota")+" أسطوانة");
-            EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث بالاسم أو الرقم أو المنزل أو المربع");p.addView(search);
+            EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث بالاسم أو الرقم أو رابط الأسرة أو المربع");p.addView(search);
             java.util.ArrayList<String> squareKeys=new java.util.ArrayList<>(),squareNames=new java.util.ArrayList<>();
             squareKeys.add(null);squareNames.add("جميع المستفيدين المتاحين ("+selection.total()+")");
             for(java.util.Map.Entry<String,String> e:selection.squares().entrySet()){squareKeys.add(e.getKey());squareNames.add((e.getKey().isEmpty()?e.getValue():"مربع: "+e.getValue())+" ("+selection.visible("",e.getKey()).size()+")");}
@@ -332,7 +332,7 @@ public final class MainActivity extends Activity {
             if(!deliver&&!DistributorUsers.allowed(user,"view")){msg("لا توجد صلاحية للبحث");return;}
             JSONArray all=pairing.allocations();JSONObject found=null;for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);if(r.getString("key").equals(key)){found=r;break;}}
             if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
-            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nالمنزل: "+row.getString("house")+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" أسطوانة");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
+            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" أسطوانة");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
             AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
             if(deliver&&!row.getBoolean("done")&&!row.optBoolean("locked"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
             d.show();
@@ -359,7 +359,7 @@ public final class MainActivity extends Activity {
         return "تم التسليم: "+r.optInt("q")+" | "+(r.optBoolean("synced")?"تمت المزامنة":"بانتظار المزامنة")+(at.isEmpty()?"":"\n"+at)+(op.isEmpty()?"":" | "+op);
     }
     private void readDistributorRows(boolean history){
-        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو المنزل أو المربع أو الدورة");p.addView(search);
+        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو رابط الأسرة أو المربع أو الدورة");p.addView(search);
             LinearLayout list=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(list);p.addView(scroll,new LinearLayout.LayoutParams(-1,(int)(380*getResources().getDisplayMetrics().density)));
             Runnable draw=()->{list.removeAllViews();int count=0;String query=DistributorUsers.normalize(search.getText().toString());for(int i=0;i<all.length();i++){JSONObject r=all.optJSONObject(i);if(r==null||(history&&!r.optBoolean("done")))continue;
                 String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | مربع "+r.optString("square","")+" | "+r.optString("cycleTitle");if(!DistributorUsers.normalize(label).contains(query))continue;count++;pairText(list,label+"\n"+deliveryDescription(r));}
@@ -380,7 +380,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){msg("تعذر إعداد التقرير");}
     }
     private void contact(String type){
-        try{Intent i;switch(type){case "phone":i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:+967734915588"));break;case "whatsapp":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588"));break;case "email":i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saleh0129@gmail.com"));break;default:return;}startActivity(i);}catch(Exception e){msg("تعذر فتح تطبيق التواصل");}
+        try{Intent i;switch(type){case "phone":i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:+967734915588"));break;case "whatsapp":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588"));break;case "feedback":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588").buildUpon().appendQueryParameter("text","السلام عليكم، لدي مقترح أو ملاحظة بشأن تطبيق توزيع الغاز:").build());break;case "email":i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saleh0129@gmail.com"));break;default:return;}startActivity(i);}catch(Exception e){msg("تعذر فتح تطبيق التواصل");}
     }
     private void showContact(){
         LinearLayout p=pairLayout();pairText(p,"توزيع الغاز\nتطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة للمطور.");
@@ -433,7 +433,7 @@ public final class MainActivity extends Activity {
             ScrollView sc=new ScrollView(this);sc.addView(p);AlertDialog dlg=new AlertDialog.Builder(this).setTitle("تسجيل التوزيع").setView(sc).setPositiveButton("إغلاق",null).create();
             if(rows.length()==0)pairText(p,"لا توجد أسر مخصصة بعد. نفّذ المزامنة أولًا.");
             for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);
-                pairText(p,r.getString("cycleTitle")+" | "+r.getInt("no")+" · "+r.getString("name")+" | منزل "+r.getString("house")+" | مربع "+r.optString("square","")+" | الحد "+r.getInt("maxQty"));
+                pairText(p,r.getString("cycleTitle")+" | "+r.getInt("no")+" · "+r.getString("name")+" | رابط الأسرة: "+(r.optString("house").isEmpty()?"—":r.optString("house"))+" | مربع "+r.optString("square","")+" | الحد "+r.getInt("maxQty"));
                 if(r.getBoolean("done"))pairText(p,deliveryDescription(r));
                 else if(r.optBoolean("locked"))pairText(p,deliveryDescription(r));else pairButton(p,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});
             }
@@ -564,7 +564,7 @@ public final class MainActivity extends Activity {
             byte[] raw;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("لا يمكن قراءة الملف");ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(b.size()+n>BeneficiaryExcel.MAX)throw new IOException("حجم الملف كبير");b.write(buf,0,n);}raw=b.toByteArray();}
             JSONArray input=BeneficiaryExcel.read(raw);JSONObject p=store.importPreview(admin,input);JSONArray valid=p.getJSONArray("valid"),errors=p.getJSONArray("errors");
             runOnUiThread(()->{if(!excelAllowed(admin))return;LinearLayout layout=pairLayout();pairText(layout,"عدد الصفوف: "+input.length()+" | صالحة: "+valid.length()+" | تحتاج تصحيح: "+errors.length());
-                for(int j=0;j<errors.length();j++)pairText(layout,errors.optString(j));if(errors.length()==0)for(int j=0;j<valid.length();j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | منزل "+f.optString("house")+" | مربع "+f.optString("square"));}
+                for(int j=0;j<errors.length();j++)pairText(layout,errors.optString(j));if(errors.length()==0)for(int j=0;j<valid.length();j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | رابط الأسرة: "+(f.optString("house").isEmpty()?"—":f.optString("house"))+" | مربع "+f.optString("square"));}
                 ScrollView sc=new ScrollView(this);sc.addView(layout);AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle(errors.length()>0?"راجع الملف ثم أعد الاستيراد":"معاينة الاستيراد").setView(sc).setNegativeButton("إغلاق",null);
                 if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مستفيدًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مستفيدًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
             });
