@@ -1,6 +1,10 @@
 name: Build permanently signed Android pairing test
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'releases/0.2.22.request'
 permissions:
   contents: read
 concurrency:
@@ -76,4 +80,4 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view v0.2.22-pairing-test >/dev/null 2>&1; then echo "Existing signed release is immutable"; exit 1; fi
-          gh release create v0.2.22-pairing-test Rafd-0.2.22-pairing-test.apk --target "$GITHUB_SHA" --prerelease --title "Rafd 0.2.22 — signed pairing test" --notes "إصدار تجريبي لهوية رفد الجديدة؛ وحدة الغاز الحالية محفوظة. تحديث فوق النسخة السابقة دون حذفها. اختبار ميداني مطلوب."
+          gh release create v0.2.22-pairing-test Rafd-0.2.22-pairing-test.apk --target "$GITHUB_SHA" --prerelease --title "Rafd 0.2.22 — signed pairing test" --notes "إصدار رفد 0.2.22: تعميم توزيع المساعدات، احتساب الاستحقاق حسب أفراد الأسرة، تأكيد الخروج وتخصيص الواجهة. تحديث للنسخ ذات التوقيع نفسه فقط؛ احفظ نسخة احتياطية قبل التثبيت. اختبار ميداني مطلوب."

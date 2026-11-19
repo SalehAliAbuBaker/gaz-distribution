@@ -1,0 +1,3 @@
+Authorized Android signed prerelease request for Rafd 0.2.22.
+Source: 2ce837a3c84caa7e9739a2cb643416e75e431b83
+Use existing pinned owner certificate; fail closed if secrets are unavailable.
