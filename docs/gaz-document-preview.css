@@ -36,3 +36,9 @@ body.gaz-preview-open{overflow:hidden}
   #gazPreviewPaper .stmt-table thead{display:table-header-group}
   #gazPreviewPaper tr,#gazPreviewPaper .stmt-sign{break-inside:avoid;page-break-inside:avoid}
 }
+
+#gazPreview .gaz-preview-toolbar{position:relative;order:5;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;border-top:1px solid #c8dad5;padding:7px 10px calc(7px + env(safe-area-inset-bottom,0px))}
+#gazPreview .gaz-preview-toolbar>button{background:#005e58;color:#fff;min-height:44px}
+#gazPreviewExtras{position:absolute;inset-inline-end:8px;bottom:100%;background:#fff;padding:6px;border:1px solid #c8dad5;z-index:2;border-radius:9px}
+#gazPreviewExtras[hidden]{display:none!important}
+#gazPreviewPaper{--rafd-size:1}
