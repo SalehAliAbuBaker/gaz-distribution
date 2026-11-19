@@ -44,6 +44,11 @@ final class GazPairing {
             store.commitSync(state,null);
         }
     }
+    void motherDelivery(String admin,String key,String op,int q,String reason)throws Exception{
+        synchronized(store){JSONObject state=status(),local=new JSONObject(store.readState());
+            JSONObject user=SyncRules.find(local.getJSONArray("users"),admin);PairPackets.require(user!=null&&user.getJSONObject("permissions").optBoolean("admin"),"Admin required");
+            MotherDelivery.change(state,local,key,op,q,user.getString("username"),reason);store.commitSync(state,local);}
+    }
     JSONArray allocations()throws Exception{
         synchronized(store){
             JSONObject s=status(),g=SyncRules.map(s,"grants"),out=SyncRules.map(s,"outbox"),acked=SyncRules.map(s,"acked"),receipts=SyncRules.map(s,"receipts");JSONArray rows=new JSONArray();
@@ -53,6 +58,13 @@ final class GazPairing {
                 JSONObject row=new JSONObject(p.toString()).put("key",k).put("done",mother?receipts.has(k):out.has(k)).put("synced",mother?receipts.has(k):acked.optBoolean(k));
                 if(mother){row.put("distributorName",SyncRules.child(s,p.getString("device")).getString("name"));JSONObject f=SyncRules.find(local.getJSONArray("families"),p.getString("family"));row.put("square",f==null?"":f.optString("square",""));}else row.put("square",labels.optString(k,p.optString("square","")));
                 JSONObject moves=mother?receipts:out;if(moves.has(k)){JSONObject receipt=SyncWire.peek(moves.getString(k));row.put("q",receipt.getInt("q")).put("at",receipt.getString("at")).put("operator",receipt.optString("operator",""));}
+                JSONObject ctl=MotherDelivery.control(s,k);
+                if(mother){JSONObject d=SyncRules.delivery(local,p.getString("cycle"),p.getString("family"));
+                    row.put("done",d!=null).put("managed",MotherDelivery.resolved(s,k)).put("locked",ctl!=null&&ctl.optBoolean("locked")).put("returned",ctl!=null&&ctl.optBoolean("returned"));
+                    if(d!=null)row.put("q",d.getInt("q")).put("at",d.getString("at")).put("operator",d.optString("updatedBy",d.optString("by")));else{row.remove("q");row.remove("at");row.remove("operator");}
+                }else if(ctl!=null){row.put("locked",true).put("returned",ctl.optBoolean("returned")).put("corrected",ctl.optBoolean("corrected"));
+                    if(ctl.optBoolean("corrected")){JSONObject d=ctl.optJSONObject("delivery");row.put("done",d!=null).put("synced",true);if(d!=null)row.put("q",d.getInt("q")).put("at",d.optString("at")).put("operator",d.optString("operator"));else{row.remove("q");row.remove("at");row.remove("operator");}}
+                }
                 rows.put(row);
             }return rows;
         }

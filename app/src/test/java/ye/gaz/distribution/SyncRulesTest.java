@@ -55,4 +55,19 @@ public class SyncRulesTest {
         f.local.getJSONArray("families").getJSONObject(0).put("square","المربع ٣");f.sync();
         assertEquals("المربع ٣",SyncRules.map(f.as,"squareLabels").getString(f.k));assertEquals(packet,SyncRules.map(f.as,"grants").getString(f.k));assertEquals(receipt,SyncRules.map(f.as,"outbox").getString(f.k));assertEquals(1,f.local.getJSONArray("deliveries").length());
     }
+    @Test public void motherCorrectsAndDeletesWithoutReplay()throws Exception{
+        Fixture f=new Fixture();f.grant();f.sync();SyncRules.record(f.as,f.k,1,f.a.getPrivate());f.sync();
+        String original=SyncRules.map(f.as,"outbox").getString(f.k);
+        MotherDelivery.change(f.ms,f.local,f.k,"edit",2,"مدير","تصحيح");f.sync();assertEquals(2,MotherDelivery.control(f.as,f.k).getJSONObject("delivery").getInt("q"));
+        MotherDelivery.change(f.ms,f.local,f.k,"delete",0,"مدير","إلغاء");SyncRules.importReceipt(f.ms,f.local,f.one,original);f.sync();assertNull(SyncRules.delivery(f.local,f.cycle,f.family));assertTrue(MotherDelivery.control(f.as,f.k).isNull("delivery"));
+        assertThrows(Exception.class,()->SyncRules.record(f.as,f.k,1,f.a.getPrivate()));
+        MotherDelivery.change(f.ms,f.local,f.k,"add",1,"مدير","إثبات");f.sync();assertEquals(1,SyncRules.delivery(f.local,f.cycle,f.family).getInt("q"));
+        assertEquals(original,SyncRules.map(f.ms,"receipts").getString(f.k));
+    }
+    @Test public void recallNeedsDurableChildLock()throws Exception{
+        Fixture f=new Fixture();f.grant();f.sync();MotherDelivery.change(f.ms,f.local,f.k,"recall",0,"مدير","استرداد");
+        assertThrows(Exception.class,()->MotherDelivery.change(f.ms,f.local,f.k,"add",1,"مدير","تسليم"));f.sync();
+        assertThrows(Exception.class,()->SyncRules.record(f.as,f.k,1,f.a.getPrivate()));assertFalse(MotherDelivery.resolved(f.ms,f.k));f.sync();assertTrue(MotherDelivery.resolved(f.ms,f.k));
+        MotherDelivery.change(f.ms,f.local,f.k,"add",1,"مدير","تسليم");f.sync();assertEquals(1,MotherDelivery.control(f.as,f.k).getJSONObject("delivery").getInt("q"));
+    }
 }

@@ -83,10 +83,12 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void distributorAction(String action){runOnUiThread(()->openDistributorAction(action));}
         @JavascriptInterface public String distributorSearchRows(){
             try{JSONObject user=sessionUser();if(!DistributorUsers.allowed(user,"view")&&!DistributorUsers.allowed(user,"deliver"))return "";JSONArray all=pairing.allocations(),rows=new JSONArray();
-                for(int i=0;i<all.length();i++){JSONObject row=all.getJSONObject(i),safe=new JSONObject();for(String k:new String[]{"key","name","no","house","square","cycleTitle","done","synced"})if(row.has(k))safe.put(k,row.get(k));rows.put(safe);}return rows.toString();
+                for(int i=0;i<all.length();i++){JSONObject row=all.getJSONObject(i),safe=new JSONObject();for(String k:new String[]{"key","name","no","house","square","cycleTitle","done","synced","locked","corrected"})if(row.has(k))safe.put(k,row.get(k));rows.put(safe);}return rows.toString();
             }catch(Exception e){return "";}
         }
         @JavascriptInterface public void openDistributorSearchResult(String key){runOnUiThread(()->showDistributorSearchResult(key));}
+        @JavascriptInterface public void motherDelivery(String admin,String cycle,String family,String action){runOnUiThread(()->motherDeliveryDialog(admin,cycle,family,action));}
+        @JavascriptInterface public void deliveryAudit(String admin){runOnUiThread(()->showDeliveryAudit(admin));}
         @JavascriptInterface public void centralAccounts(String admin){runOnUiThread(()->centralDevices(admin));}
         @JavascriptInterface public void chooseLoginRole(String admin,String selected){runOnUiThread(()->setupLoginRole(admin,selected));}
         @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
@@ -268,6 +270,34 @@ public final class MainActivity extends Activity {
         }catch(Exception e){msg("تعذر فتح قائمة الأسر");}
     }
     
+    private void motherDeliveryDialog(String admin,String cycle,String family,String action){
+        if(!adminAllowed(admin))return;
+        try{String key=SyncRules.key(cycle,family);JSONObject state=pairing.status();if(!"mother".equals(state.getString("role")))return;
+            JSONObject local=new JSONObject(store.readState()),grant=SyncWire.peek(SyncRules.map(state,"grants").getString(key)),f=SyncRules.find(local.getJSONArray("families"),family),c=SyncRules.find(local.getJSONArray("cycles"),cycle),d=SyncRules.delivery(local,cycle,family);
+            if(c==null||c.optBoolean("closed")){msg("أعد فتح الدورة أولًا");return;}
+            boolean resolved=MotherDelivery.resolved(state,key);
+            if("recall".equals(action)){if(resolved||MotherDelivery.control(state,key)!=null){msg("تمت التسوية أو طلب الاسترداد بالفعل");return;}}
+            else if(!resolved){msg("استرد صلاحية التسليم من الموزع أولًا");return;}
+            if(("edit".equals(action)||"delete".equals(action))&&d==null||"add".equals(action)&&d!=null){msg("تغيرت حالة الحركة؛ أعد فتح الكشف");return;}
+            if(!java.util.Arrays.asList("recall","add","edit","delete").contains(action))return;
+            LinearLayout p=pairLayout();pairText(p,f.getString("name")+" | "+c.getString("title"));
+            pairText(p,"recall".equals(action)?"سيُقفل التسليم على الموزع عند المزامنة. يجب تأكيد الإقفال بمزامنة ثانية قبل أن تتسلم الأم الصلاحية.":"سيبقى الإيصال الأصلي محفوظًا رقابيًا. تنتقل النتيجة إلى الموزع عند المزامنة.");
+            EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+(d==null?c.getInt("quota"):d.getInt("q")));
+            boolean needsQty="add".equals(action)||"edit".equals(action);if(needsQty){qty.setHint("الكمية");p.addView(qty);}
+            EditText reason=new EditText(this);reason.setHint("سبب الإجراء (مطلوب)");reason.setMaxLines(3);reason.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});p.addView(reason);
+            String title="recall".equals(action)?"استرداد صلاحية التسليم":"delete".equals(action)?"حذف حركة التسليم":"edit".equals(action)?"تعديل حركة التسليم":"إضافة تسليم من الأم";
+            AlertDialog dlg=new AlertDialog.Builder(this).setTitle(title).setView(p).setNegativeButton("إلغاء",null).setPositiveButton("اعتماد",null).create();
+            dlg.setOnShowListener(v->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{try{if(!adminAllowed(admin))return;String why=reason.getText().toString().trim();if(why.isEmpty()){reason.setError("أدخل السبب");return;}int q=needsQty?Integer.parseInt(qty.getText().toString()):0;pairing.motherDelivery(admin,key,action,q,why);dlg.dismiss();notifyPairChange();msg("تم اعتماد الإجراء");}catch(Exception e){msg("تعذر الاعتماد؛ تحقق من حالة الحركة والكمية");}}));dlg.show();
+        }catch(Exception e){msg("تعذر فتح حركة التسليم");}
+    }
+    private void showDeliveryAudit(String admin){
+        if(!adminAllowed(admin))return;
+        try{JSONObject s=pairing.status();if(!"mother".equals(s.getString("role")))return;JSONArray log=s.optJSONArray("deliveryAudit");LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.addView(p);
+            if(log==null||log.length()==0)pairText(p,"لا توجد تصحيحات إدارية.");
+            else for(int i=log.length()-1;i>=0;i--){JSONObject e=log.getJSONObject(i),g=SyncWire.peek(SyncRules.map(s,"grants").getString(e.getString("key")));JSONObject before=e.optJSONObject("before"),after=e.optJSONObject("after");String a=e.getString("action");String label="edit".equals(a)?"تعديل":"delete".equals(a)?"حذف":"add".equals(a)?"إضافة":"recall".equals(a)?"طلب استرداد":"تأكيد الاسترداد";pairText(p,g.getString("name")+" | "+g.getString("cycleTitle")+"\n"+label+" | "+e.getString("actor")+" | "+e.getString("at")+"\nقبل: "+(before==null?"—":before.optInt("q"))+" | بعد: "+(after==null?"—":after.optInt("q"))+"\nالسبب: "+e.getString("reason"));}
+            new AlertDialog.Builder(this).setTitle("سجل تصحيحات التسليم").setView(sc).setPositiveButton("إغلاق",null).show();
+        }catch(Exception e){msg("تعذر عرض سجل التصحيحات");}
+    }
     private void motherAllocations(String admin){
         if(!adminAllowed(admin))return;
         try{
@@ -283,7 +313,7 @@ public final class MainActivity extends Activity {
             if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
             LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nالمنزل: "+row.getString("house")+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" أسطوانة");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
             AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
-            if(deliver&&!row.getBoolean("done"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
+            if(deliver&&!row.getBoolean("done")&&!row.optBoolean("locked"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
             d.show();
         }catch(Exception e){msg("تعذر فتح بيانات المستفيد");}
     }
@@ -301,7 +331,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){msg("تعذر فتح الشاشة");}
     }
     private String deliveryDescription(JSONObject r){
-        if(!r.optBoolean("done"))return "لم يستلم";
+        if(!r.optBoolean("done"))return r.optBoolean("locked")?(r.optBoolean("corrected")?"ألغت الأم حركة التسليم — التسليم مقفل":"استرداد الصلاحية للأم — التسليم مقفل"):"لم يستلم";
         String at=r.optString("at","").replace('T',' ').replace("Z","");
         if(at.length()>16)at=at.substring(0,16);
         String op=r.optString("operator","");
@@ -382,8 +412,8 @@ public final class MainActivity extends Activity {
             if(rows.length()==0)pairText(p,"لا توجد أسر مخصصة بعد. نفّذ المزامنة أولًا.");
             for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);
                 pairText(p,r.getString("cycleTitle")+" | "+r.getInt("no")+" · "+r.getString("name")+" | منزل "+r.getString("house")+" | مربع "+r.optString("square","")+" | الحد "+r.getInt("maxQty"));
-                if(r.getBoolean("done"))pairText(p,r.getBoolean("synced")?"تم التسليم — تمت المزامنة":"تم التسليم — بانتظار المزامنة");
-                else pairButton(p,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});
+                if(r.getBoolean("done"))pairText(p,deliveryDescription(r));
+                else if(r.optBoolean("locked"))pairText(p,deliveryDescription(r));else pairButton(p,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});
             }
             dlg.show();
         }catch(Exception e){msg("تعذر فتح الأسر المخصصة");}
