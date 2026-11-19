@@ -72,6 +72,18 @@ final class GazStore extends SQLiteOpenHelper {
         }finally{db.endTransaction();}
     }
     synchronized void restoreIndependent(String json)throws Exception{if(!role().equals("independent"))throw new IllegalStateException("Pair recovery not implemented");writeState(json);}
+    synchronized JSONArray loginAccounts()throws Exception{
+        if("distributor".equals(role()))return distributorUsers();String raw=readState();return "null".equals(raw)?new JSONArray():new JSONObject(raw).getJSONArray("users");
+    }
+    synchronized JSONObject loginAccount(String id)throws Exception{return DistributorUsers.find(loginAccounts(),id);}
+    synchronized JSONObject importPreview(String admin,JSONArray rows)throws Exception{
+        String role=role();if(!("mother".equals(role)||"independent".equals(role))||!admin(admin))throw new SecurityException("Admin required");
+        return BeneficiaryExcel.preview(new JSONObject(readState()),rows);
+    }
+    synchronized int importBeneficiaries(String admin,JSONArray rows)throws Exception{
+        String role=role();if(!("mother".equals(role)||"independent".equals(role))||!admin(admin))throw new SecurityException("Admin required");
+        JSONObject local=new JSONObject(readState());int count=BeneficiaryExcel.append(local,rows);writeLocalState(local.toString());return count;
+    }
     synchronized JSONArray distributorUsers()throws Exception{
         if(!"distributor".equals(role()))throw new SecurityException("Distributor required");
         return CentralUsers.effective(pairRead(),new JSONObject(readState()).getJSONArray("users"));

@@ -27,11 +27,12 @@ import android.graphics.Color;
 
 public final class MainActivity extends Activity {
     private static final String HOME="https://appassets.androidplatform.net/assets/index.html";
-    private static final int SAVE=21,RESTORE=22;
+    private static final int SAVE=21,RESTORE=22,IMPORT_EXCEL=23;
     private WebView web;
     private GazStore store;
     private File pending;
-    private String restoreAdmin;
+    private String restoreAdmin,excelAdmin;
+    private LocalBiometric biometric;
     private final ExecutorService workers=Executors.newSingleThreadExecutor();
     private String device;
     private GazPairing pairing;
@@ -41,7 +42,7 @@ public final class MainActivity extends Activity {
     private long lastLoginAttempt;
     private final ExecutorService network=Executors.newSingleThreadExecutor();
     @Override public void onCreate(Bundle saved){
-        super.onCreate(saved);
+        super.onCreate(saved);biometric=new LocalBiometric(this);if(saved!=null)excelAdmin=saved.getString("excelAdmin");
         try{store=new GazStore(this);store.readState();}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر فتح البيانات").setMessage("لم تُحذف بياناتك. راجع الدعم الفني.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
         android.content.SharedPreferences prefs=getSharedPreferences("identity",MODE_PRIVATE);
         device=prefs.getString("id",null);if(device==null){device=UUID.randomUUID().toString();prefs.edit().putString("id",device).commit();}
@@ -68,6 +69,11 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String readState(){try{return isDistributor()?store.distributorWebState():store.readState();}catch(Exception e){return "";}}
         @JavascriptInterface public boolean writeState(String json){try{store.writeLocalState(json);return true;}catch(Exception e){return false;}}
         @JavascriptInterface public String deviceId(){return device;}
+        @JavascriptInterface public boolean biometricEnabled(){return biometric!=null&&biometric.enabled();}
+        @JavascriptInterface public void biometricLogin(){runOnUiThread(()->loginWithBiometric());}
+        @JavascriptInterface public void biometricSettings(String id){runOnUiThread(()->MainActivity.this.biometricSettings(id));}
+        @JavascriptInterface public void excelTemplate(String admin){runOnUiThread(()->exportExcelTemplate(admin));}
+        @JavascriptInterface public void importExcel(String admin){runOnUiThread(()->chooseExcel(admin));}
         @JavascriptInterface public void openContact(String type){runOnUiThread(()->contact(type));}
         @JavascriptInterface public String deviceRole(){try{return store.role();}catch(Exception e){return "locked";}}
         @JavascriptInterface public void manageDevices(String admin){runOnUiThread(()->manageDevicesScreen(admin));}
@@ -389,6 +395,7 @@ public final class MainActivity extends Activity {
             if(pairing.accountRevision()>0)pairText(p,"الحساب والصلاحيات تُدار من الجوال الأم.");else if(DistributorUsers.allowed(user,"admin"))pairButton(p,"المستخدمون والصلاحيات",()->{d.dismiss();distributorUserList();});
             pairButton(p,"تحديث صلاحياتي من الجوال الأم",()->{d.dismiss();scanQr("policy","device-policy");});
             if(DistributorUsers.allowed(user,"sync"))pairButton(p,"المزامنة بعنوان IP (احتياطي)",()->{d.dismiss();connectLan(user.optString("id"));});
+            pairButton(p,"الدخول بالبصمة",()->{d.dismiss();biometricSettings(user.optString("id"));});
             pairButton(p,"حول التطبيق والدعم",()->showContact());
             pairText(p,"إدارة التخصيص والاستعادة ونقل السلطة من الجوال الأم غير متاحة للموزع.");
             d.show();
@@ -543,6 +550,52 @@ public final class MainActivity extends Activity {
             }
         },new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).build());
     }
+    private boolean excelAllowed(String admin){
+        try{String r=store.role();if(("mother".equals(r)||"independent".equals(r))&&store.admin(admin))return true;}catch(Exception ignored){}
+        msg("هذه الصلاحية لمدير الجوال الأم");return false;
+    }
+    private void exportExcelTemplate(String admin){if(!excelAllowed(admin))return;workers.execute(()->{try{File f=tempFile("Gaz_Beneficiaries_100",".xlsx",BeneficiaryExcel.template());runOnUiThread(()->{if(excelAllowed(admin))savePicker(f,BeneficiaryExcel.MIME);});}catch(Exception e){msg("تعذر إنشاء نموذج Excel");}});}
+    private void chooseExcel(String admin){
+        if(!excelAllowed(admin))return;excelAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);
+        try{startActivityForResult(i,IMPORT_EXCEL);}catch(Exception e){excelAdmin=null;msg("تعذر فتح الملفات");}
+    }
+    private void readExcel(String admin,Uri uri){
+        if(!excelAllowed(admin))return;workers.execute(()->{try{
+            byte[] raw;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("لا يمكن قراءة الملف");ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(b.size()+n>BeneficiaryExcel.MAX)throw new IOException("حجم الملف كبير");b.write(buf,0,n);}raw=b.toByteArray();}
+            JSONArray input=BeneficiaryExcel.read(raw);JSONObject p=store.importPreview(admin,input);JSONArray valid=p.getJSONArray("valid"),errors=p.getJSONArray("errors");
+            runOnUiThread(()->{if(!excelAllowed(admin))return;LinearLayout layout=pairLayout();pairText(layout,"عدد الصفوف: "+input.length()+" | صالحة: "+valid.length()+" | تحتاج تصحيح: "+errors.length());
+                for(int j=0;j<errors.length();j++)pairText(layout,errors.optString(j));if(errors.length()==0)for(int j=0;j<valid.length();j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | منزل "+f.optString("house")+" | مربع "+f.optString("square"));}
+                ScrollView sc=new ScrollView(this);sc.addView(layout);AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle(errors.length()>0?"راجع الملف ثم أعد الاستيراد":"معاينة الاستيراد").setView(sc).setNegativeButton("إغلاق",null);
+                if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مستفيدًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مستفيدًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
+            });
+        }catch(Exception e){String message=e instanceof IOException?e.getMessage():"اختر ملف XLSX مطابقًا للنموذج";runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر الاستيراد").setMessage(message+"\nلم تُضف أي بيانات.").setPositiveButton("إغلاق",null).show());}});
+    }
+    private String biometricBinding(JSONObject u)throws Exception{
+        String raw=store.role()+"|"+device+"|"+u.getString("id")+"|"+u.getString("salt")+"|"+u.getString("hash")+"|"+pairing.accountRevision();
+        return PairPackets.digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+    private void biometricSettings(String id){
+        try{JSONObject user=store.loginAccount(id);if(user==null||isDistributor()&&!id.equals(distributorSessionId)){msg("سجل الدخول أولًا");return;}
+            LinearLayout p=pairLayout();pairText(p,"يُربط الدخول بالبصمة بحساب واحد على هذا الجهاز. يُطلب تأكيد كلمة مرور الحساب عند التفعيل.");
+            EditText pw=new EditText(this);pw.setHint("كلمة المرور الحالية");pw.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);p.addView(pw);
+            AlertDialog.Builder b=new AlertDialog.Builder(this).setTitle("الدخول بالبصمة").setView(p).setNegativeButton("إلغاء",null);
+            if(biometric.enabled())b.setNeutralButton("إلغاء التفعيل",(d,w)->{biometric.disable();msg("تم إلغاء الدخول بالبصمة");});
+            AlertDialog d=b.setPositiveButton("تفعيل",null).create();d.setOnShowListener(v->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{String password=pw.getText().toString();pw.setText("");d.dismiss();workers.execute(()->{try{
+                JSONObject current=DistributorUsers.login(store.loginAccounts(),user.getString("username"),password);if(current==null||!id.equals(current.getString("id")))throw new SecurityException();
+                JSONObject token=new JSONObject().put("id",id).put("binding",biometricBinding(current));
+                runOnUiThread(()->biometric.prompt(token,new LocalBiometric.Result(){public void success(JSONObject p){msg("تم تفعيل الدخول بالبصمة لهذا الحساب");}public void fail(String m){msg(m);}}));
+            }catch(Exception e){msg("كلمة المرور غير صحيحة أو تغير الحساب");}});}));d.show();
+        }catch(Exception e){msg("تعذر فتح إعدادات البصمة");}
+    }
+    private void loginWithBiometric(){
+        biometric.prompt(null,new LocalBiometric.Result(){
+            public void success(JSONObject token){try{JSONObject u=store.loginAccount(token.getString("id"));if(u==null||!biometricBinding(u).equals(token.getString("binding"))){biometric.disable();msg("تغير الحساب أو الصلاحيات؛ سجل بكلمة المرور وأعد التفعيل");return;}
+                if(isDistributor())distributorSessionId=u.getString("id");JSONObject safe=isDistributor()?DistributorUsers.publicUser(u):new JSONObject().put("id",u.getString("id")).put("username",u.getString("username")).put("permissions",u.getJSONObject("permissions"));
+                if(web!=null)web.evaluateJavascript("window.gazBiometricAuthenticated("+JSONObject.quote(safe.toString())+")",null);
+            }catch(Exception e){msg("تعذر دخول الحساب؛ استخدم كلمة المرور");}}
+            public void fail(String m){msg(m);}
+        });
+    }
     private boolean backupAllowed(String admin){
         try{String role=store.role();if(("mother".equals(role)||"independent".equals(role))&&adminAllowed(admin))return true;}catch(Exception ignored){}
         msg("يلزم حساب مدير الجوال الأم أو الجهاز المستقل");return false;
@@ -571,9 +624,9 @@ public final class MainActivity extends Activity {
         super.onActivityResult(req,result,data);
         if(req==SAVE){File f=pending;pending=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&f!=null){
             Uri uri=data.getData();workers.execute(()->{try(InputStream in=new FileInputStream(f);OutputStream out=getContentResolver().openOutputStream(uri,"w")){if(out==null)throw new IOException();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1)out.write(b,0,n);out.flush();msg("تم حفظ الملف");}catch(Exception e){msg("تعذر حفظ الملف");}});
-        }}else if(req==RESTORE){String admin=restoreAdmin;restoreAdmin=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&admin!=null)askPass(false,data.getData(),false,admin);}
+        }}else if(req==IMPORT_EXCEL){String admin=excelAdmin;excelAdmin=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&admin!=null)readExcel(admin,data.getData());}else if(req==RESTORE){String admin=restoreAdmin;restoreAdmin=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&admin!=null)askPass(false,data.getData(),false,admin);}
     }
-    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());b.putString("scanMode",scanMode);b.putString("scanAdmin",scanAdmin);b.putString("restoreAdmin",restoreAdmin);}
+    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);if(pending!=null)b.putString("pending",pending.getAbsolutePath());b.putString("scanMode",scanMode);b.putString("scanAdmin",scanAdmin);b.putString("restoreAdmin",restoreAdmin);b.putString("excelAdmin",excelAdmin);}
     private void msg(String s){runOnUiThread(()->Toast.makeText(this,s,Toast.LENGTH_LONG).show());}
     @Override public void onBackPressed(){if(web!=null){web.evaluateJavascript("(function(){let p=document.getElementById('gazPreview');if(p&&!p.hidden){document.getElementById('gazPreviewClose').click();return;}if(typeof activeUser!=='undefined'&&activeUser&&current!=='home'){show('home');return;}alert('للخروج استخدم شاشة التطبيقات أو تسجيل الخروج.');})()",null);}else super.onBackPressed();}
     @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}closeLan();network.shutdownNow();workers.shutdown();super.onDestroy();}
