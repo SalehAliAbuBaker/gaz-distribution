@@ -100,7 +100,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void chooseLoginRole(String admin,String selected){runOnUiThread(()->setupLoginRole(admin,selected));}
         @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
         @JavascriptInterface public void backup(String admin){runOnUiThread(()->{if(backupAllowed(admin))askPass(true,null,false,admin);});}
-        @JavascriptInterface public void cloudBackup(String admin){runOnUiThread(()->{if(!backupAllowed(admin))return;new AlertDialog.Builder(MainActivity.this).setTitle("نسخة سحابية مشفرة").setMessage("سيتم إنشاء ملف مشفر بصيغة json.gz. بعد إنشائه اختر حفظه في Google Drive أو خدمة تخزين سحابية لديك. التطبيق لا يرسل البيانات تلقائيًا، وتبقى القاعدة محلية.").setNegativeButton("إلغاء",null).setPositiveButton("متابعة",(d,w)->askPass(true,null,true,admin)).show();});}
+        @JavascriptInterface public String backupEmail(String admin){try{return !isDistributor()&&store.admin(admin)?savedBackupEmail():"";}catch(Exception e){return "";}}
+        @JavascriptInterface public boolean saveBackupEmail(String admin,String email){try{if(isDistributor()||!store.admin(admin))return false;String value=email==null?"":email.trim();if(!value.isEmpty()&&(value.length()>254||!android.util.Patterns.EMAIL_ADDRESS.matcher(value).matches()))return false;return getSharedPreferences("gaz_backup_destination",MODE_PRIVATE).edit().putString("email",value).commit();}catch(Exception e){return false;}}
+        @JavascriptInterface public void cloudBackup(String admin){runOnUiThread(()->chooseCloudBackup(admin));}
         @JavascriptInterface public void restore(String admin){runOnUiThread(()->{if(!backupAllowed(admin))return;closeLan();restoreAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(i,RESTORE);}catch(Exception e){restoreAdmin=null;msg("تعذر فتح الملفات");}});}
         @JavascriptInterface public void shareText(String text){if(isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
         @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,0);}
@@ -590,15 +592,29 @@ public final class MainActivity extends Activity {
         try{String role=store.role();if(("mother".equals(role)||"independent".equals(role))&&adminAllowed(admin))return true;}catch(Exception ignored){}
         msg("يلزم حساب مدير الجوال الأم أو الجهاز المستقل");return false;
     }
+    private String savedBackupEmail(){return getSharedPreferences("gaz_backup_destination",MODE_PRIVATE).getString("email","");}
+    private void chooseCloudBackup(String admin){
+        if(!backupAllowed(admin))return;String email=savedBackupEmail();
+        LinearLayout p=pairLayout();pairText(p,"ستُنشأ نسخة مشفرة بصيغة json.gz. "+(email.isEmpty()?"لم يُحدد بريد بعد.":"البريد المحفوظ: "+email)+"\nاختر وجهة الحفظ؛ الرفع ليس تلقائيًا.");
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("نسخ احتياطي سحابي").setView(p).setNegativeButton("إلغاء",null).create();
+        pairButton(p,"حفظ في Google Drive",()->{d.dismiss();askPass(true,null,true,admin,"drive",email);});
+        pairButton(p,"إرسال إلى البريد الإلكتروني",()->{if(email.isEmpty()){msg("أدخل بريد النسخ السحابي في الإعدادات أولًا");return;}d.dismiss();askPass(true,null,true,admin,"email",email);});
+        pairButton(p,"مشاركة مع خدمة أخرى",()->{d.dismiss();askPass(true,null,true,admin,"share","");});d.show();
+    }
+    private void emailBackup(File f,String email){
+        try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",f);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/gzip");i.putExtra(Intent.EXTRA_EMAIL,new String[]{email});i.putExtra(Intent.EXTRA_SUBJECT,"نسخة احتياطية مشفرة – توزيع الغاز");i.putExtra(Intent.EXTRA_TEXT,"نسخة احتياطية مشفرة من تطبيق توزيع الغاز. لا ترسل كلمة مرور فك التشفير مع الملف.");i.putExtra(Intent.EXTRA_STREAM,uri);i.setClipData(ClipData.newRawUri("نسخة احتياطية مشفرة",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(i,"اختر Gmail أو تطبيق البريد، ثم تحقق من المستلم وأرسل"));}catch(Exception e){msg("تعذر فتح مشاركة البريد؛ احفظ النسخة محليًا أولًا");}
+    }
     private void cloudShare(File f){
         try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",f);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/gzip");i.putExtra(Intent.EXTRA_STREAM,uri);i.setClipData(ClipData.newRawUri("نسخة احتياطية مشفرة",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(i,"اختر Drive أو خدمة التخزين السحابي"));}catch(Exception e){msg("تعذرت المشاركة؛ استخدم حفظ النسخة محليًا ثم ارفعها إلى السحابة");}
     }
-    private void askPass(boolean backup,Uri uri,boolean cloud,String admin){
+    private void askPass(boolean backup,Uri uri,boolean cloud,String admin){askPass(backup,uri,cloud,admin,"share","");}
+    private void askPass(boolean backup,Uri uri,boolean cloud,String admin,String destination,String email){
         if(!backupAllowed(admin))return;
         EditText password=new EditText(this);password.setSingleLine(true);password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);password.setHint("كلمة مرور النسخة (8 أحرف فأكثر)");
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(backup?"تشفير النسخة الاحتياطية":"فك تشفير النسخة الاحتياطية").setMessage(backup?"احتفظ بكلمة المرور خارج هذا الجوال. لا يمكن استردادها.":"لن تتغير البيانات قبل التحقق والتأكيد.").setView(password).setNegativeButton("إلغاء",null).setPositiveButton("متابعة",null).create();
         dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{char[] pass=password.getText().toString().toCharArray();if(pass.length<8){Arrays.fill(pass,'\0');password.setError("8 أحرف على الأقل");return;}password.setText("");dialog.dismiss();
-            workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("gaz_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->{if(!backupAllowed(admin))return;if(cloud)cloudShare(f);else savePicker(f,"application/gzip");});}else{
+            workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("gaz_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->{if(!backupAllowed(admin))return;if(cloud&&"email".equals(destination))emailBackup(f,email);else if(cloud&&"drive".equals(destination)){msg(email.isEmpty()?"اختر Drive في منتقي الملفات":"اختر Drive والحساب "+email+" في منتقي الملفات");savePicker(f,"application/gzip");}else if(cloud)cloudShare(f);else savePicker(f,"application/gzip");});}else{
                 byte[] bytes;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();bytes=readLimited(in);}
                 String json=GazStore.decodeBackup(bytes,pass);JSONObject checked=store.previewRestore(json);boolean mother="mother".equals(store.role());
                 String summary="الأسر: "+checked.getJSONArray("families").length()+" | الدورات: "+checked.getJSONArray("cycles").length()+" | حركات التسليم: "+checked.getJSONArray("deliveries").length();
