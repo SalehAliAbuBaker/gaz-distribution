@@ -135,7 +135,7 @@ public final class MainActivity extends Activity {
             AlertDialog d=new AlertDialog.Builder(this).setTitle("إدارة الجوالات").setView(scroll).setPositiveButton("إغلاق",null).create();
             if(role.equals("independent")){
                 pairText(p,"هذا الجهاز مستقل الآن.");
-                pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف مالك هوية الحارة؛ نقل السلطة والاستعادة على جهاز مقترن غير متاحين بعد. احفظ نسخة احتياطية خارج الجهاز قبل الربط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من حفظ اسم الحارة ووجود حساب مدير");}}).show());
+                pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف الجهاز الأم لإدارة الكيان أو المرفق وربط الموزعين. نقل صلاحية الجهاز الأم إلى جهاز آخر غير متاح حاليًا؛ احفظ نسخة احتياطية قبل الربط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من وجود حساب مدير وحالة الربط");}}).show());
                 pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر والدورات والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
             }else if(role.equals("pending")){
                 pairText(p,"بانتظار موافقة الجوال الأم.");
@@ -143,7 +143,7 @@ public final class MainActivity extends Activity {
                 pairButton(p,"مسح رمز موافقة الجوال الأم",()->{d.dismiss();scanQr("approval",admin);});
                 pairButton(p,"إلغاء الطلب المعلق",()->new AlertDialog.Builder(this).setTitle("إلغاء الطلب؟").setMessage("إذا سبق للجوال الأم اعتماد الطلب فسيظل تسجيله هناك. لا توجد تخصيصات في هذا الإصدار.").setNegativeButton("رجوع",null).setPositiveButton("إلغاء الطلب",(x,y)->{try{if(!adminAllowed(admin))return;pairing.cancelPending();d.dismiss();notifyPairChange();}catch(Exception e){msg("تعذر الإلغاء");}}).show());
             }else if(role.equals("mother")){
-                pairText(p,"الجوال الأم — "+s.getString("area"));
+                pairText(p,"الجهاز الأم");if(!"غير محدد".equals(s.optString("area")))pairText(p,"نطاق الربط: "+s.optString("area"));
                 pairButton(p,"مسح طلب ربط موزع جديد",()->{d.dismiss();scanQr("request",admin);});
                 JSONObject devices=s.getJSONObject("devices");
                 pairText(p,"الأجهزة المسجلة: "+devices.length());
@@ -157,7 +157,7 @@ public final class MainActivity extends Activity {
                     String approval=child.getString("approval");pairButton(p,"عرض رمز الموافقة مجددًا",()->{try{showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح الرمز من جوال الموزع وقارن بصمة الأم.");}catch(Exception e){msg("تعذر عرض الرمز");}});
                 }
             }else if(role.equals("distributor")){
-                pairText(p,"موزع مقترن بحارة: "+s.getString("area"));
+                pairText(p,"موزع مرتبط بالجهاز الأم — نطاق الربط: "+s.getString("area"));
                 pairText(p,"بصمة الجوال الأم: "+PairPackets.shortFingerprint(s.getString("motherPub")));
                 pairText(p,s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد.");
                 pairButton(p,"مزامنة بمسح رمز QR للجوال الأم",()->{d.dismiss();scanQr("sync",admin);});
@@ -172,7 +172,7 @@ public final class MainActivity extends Activity {
         try{if(!"independent".equals(store.role()))return;
             if("distributor".equals(selected)){manageDevicesScreen(admin);return;}
             if(!"mother".equals(selected))return;
-            new AlertDialog.Builder(this).setTitle("سيرفر (الأم)").setMessage("هل تريد تعيين هذا الجهاز جوالًا أم لهذه الحارة؟ لا يمكن تغيير الدور بعد الاقتران من شاشة الدخول.").setNegativeButton("لاحقًا",null).setPositiveButton("تعيين الأم",(v,w)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();notifyPairChange();}catch(Exception e){msg("تعذر تعيين الأم؛ تحقق من اسم الحارة");}}).show();
+            new AlertDialog.Builder(this).setTitle("تعيين الجهاز الأم").setMessage("هل تريد تعيين هذا الجهاز جهازًا أم لإدارة الكيان أو المرفق؟ لا يُشترط إدخال اسم الكيان. لا يمكن تغيير الدور من شاشة الدخول بعد الاقتران.").setNegativeButton("لاحقًا",null).setPositiveButton("تعيين الأم",(v,w)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();notifyPairChange();}catch(Exception e){msg("تعذر تعيين الجهاز الأم؛ تحقق من حالة الربط وصلاحية المدير");}}).show();
         }catch(Exception e){msg("تعذر التحقق من نوع الجهاز");}
     }
     private void centralDevices(String admin){
@@ -395,7 +395,7 @@ public final class MainActivity extends Activity {
     }
     private void distributorSettings(){
         try{JSONObject user=sessionUser();if(user==null)return;
-            JSONObject s=pairing.status();LinearLayout p=pairLayout();pairText(p,"الحارة: "+s.getString("area")+"\nالمستخدم: "+user.getString("username")+"\n"+(s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد"));
+            JSONObject s=pairing.status();LinearLayout p=pairLayout();pairText(p,"نطاق الربط: "+s.getString("area")+"\nالمستخدم: "+user.getString("username")+"\n"+(s.has("lastSync")?"آخر مزامنة: "+new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(s.getLong("lastSync"))):"لم تتم المزامنة بعد"));
             pairText(p,"بصمة الجوال الأم: "+PairPackets.shortFingerprint(s.getString("motherPub")));
             AlertDialog d=new AlertDialog.Builder(this).setTitle("إعدادات الموزع").setView(p).setPositiveButton("إغلاق",null).create();
             if(pairing.accountRevision()>0)pairText(p,"الحساب والصلاحيات تُدار من الجوال الأم.");else if(DistributorUsers.allowed(user,"admin"))pairButton(p,"المستخدمون والصلاحيات",()->{d.dismiss();distributorUserList();});
@@ -490,7 +490,7 @@ public final class MainActivity extends Activity {
                 new AlertDialog.Builder(this).setTitle("قبول الموزع؟").setMessage("الاسم: "+r.getString("name")+"\nالبصمة: "+fp+"\nقارن البصمة بالتي تظهر على جوال الموزع نفسه. لا توافق إن اختلفت.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;String approval=pairing.approve(packet);notifyPairChange();showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح هذا الرمز من جهاز الموزع وقارن بصمة الأم.");}catch(Exception e){msg("رفض الطلب؛ تعارض أو جهاز مسجل سابقًا");}}).show();
             }else if(mode.equals("approval")){
                 JSONObject r=pairing.inspectApproval(packet);String fp=PairPackets.shortFingerprint(r.getString("pub"));
-                new AlertDialog.Builder(this).setTitle("تأكيد الجوال الأم").setMessage("الحارة: "+r.getString("area")+"\nبصمة الأم: "+fp+"\nقارنها بالبصمة المعروضة على الجوال الأم.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;pairing.accept(packet);notifyPairChange();msg("تم اعتماد هوية الجوال الأم؛ الصرف مقفل حتى التخصيص");}catch(Exception e){msg("تعذر اعتماد الموافقة");}}).show();
+                new AlertDialog.Builder(this).setTitle("تأكيد الجوال الأم").setMessage("نطاق الربط: "+r.getString("area")+"\nبصمة الأم: "+fp+"\nقارنها بالبصمة المعروضة على الجوال الأم.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;pairing.accept(packet);notifyPairChange();msg("تم اعتماد هوية الجوال الأم؛ الصرف مقفل حتى التخصيص");}catch(Exception e){msg("تعذر اعتماد الموافقة");}}).show();
             }
         }catch(Exception e){msg("الرمز غير صالح أو لا يخص هذا الجهاز");}
     }
