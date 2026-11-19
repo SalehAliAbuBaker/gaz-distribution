@@ -70,4 +70,15 @@ public class SyncRulesTest {
         assertThrows(Exception.class,()->SyncRules.record(f.as,f.k,1,f.a.getPrivate()));assertFalse(MotherDelivery.resolved(f.ms,f.k));f.sync();assertTrue(MotherDelivery.resolved(f.ms,f.k));
         MotherDelivery.change(f.ms,f.local,f.k,"add",1,"مدير","تسليم");f.sync();assertEquals(1,MotherDelivery.control(f.as,f.k).getJSONObject("delivery").getInt("q"));
     }
+    @Test public void pendingReceiptDuringRecallIsNotLost()throws Exception{
+        Fixture f=new Fixture();f.grant();f.sync();MotherDelivery.change(f.ms,f.local,f.k,"recall",0,"مدير","استرداد");SyncRules.record(f.as,f.k,1,f.a.getPrivate());
+        f.sync();assertEquals(1,SyncRules.delivery(f.local,f.cycle,f.family).getInt("q"));f.sync();assertTrue(MotherDelivery.resolved(f.ms,f.k));
+        MotherDelivery.change(f.ms,f.local,f.k,"edit",2,"مدير","تصحيح");f.sync();assertEquals(2,MotherDelivery.control(f.as,f.k).getJSONObject("delivery").getInt("q"));
+    }
+    @Test public void centralBatchKeepsSignedReceipt()throws Exception{
+        Fixture f=new Fixture();f.grant();f.sync();SyncRules.record(f.as,f.k,1,f.a.getPrivate());f.sync();
+        assertEquals(1,MotherDelivery.batch(f.ms,f.local,f.cycle,"delete",new JSONObject(),"مدير","إلغاء الكشف"));
+        assertEquals(2,MotherDelivery.batch(f.ms,f.local,f.cycle,"add",new JSONObject().put(f.family,2).put(f.other,1),"مدير","تسليم جماعي"));f.sync();
+        assertEquals(2,f.local.getJSONArray("deliveries").length());assertEquals(2,MotherDelivery.control(f.as,f.k).getJSONObject("delivery").getInt("q"));
+    }
 }

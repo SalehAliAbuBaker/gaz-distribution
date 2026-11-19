@@ -41,6 +41,26 @@ final class MotherDelivery {
         policy.put("revision",Math.addExact(policy.optLong("revision",0),1)).put("actor",actor).put("reason",reason);
         SyncRules.map(s,"deliveryControls").put(k,policy);audit(s,k,actor,reason,op,old,next);
     }
+    static int batch(JSONObject s,JSONObject local,String cycle,String op,JSONObject requested,String actor,String reason)throws Exception{
+        SyncRules.require("mother".equals(s.getString("role")),"Mother required");
+        JSONObject c=SyncRules.find(local.getJSONArray("cycles"),cycle);SyncRules.require(c!=null&&!c.optBoolean("closed"),"Open cycle required");
+        reason=reason.trim();SyncRules.require(!reason.isEmpty()&&reason.length()<=500,"Reason required");
+        Map<String,Integer> tasks=new LinkedHashMap<>();
+        if("delete".equals(op)){JSONArray rows=local.getJSONArray("deliveries");for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);if(cycle.equals(r.getString("c")))tasks.put(r.getString("f"),0);}}
+        else if("add".equals(op)){for(Iterator<String> it=requested.keys();it.hasNext();){String family=it.next();PairPackets.uuid(family);tasks.put(family,SyncRules.quantity(requested.get(family)));}}
+        else throw new IllegalArgumentException("Unknown batch action");
+        SyncRules.require(!tasks.isEmpty()&&tasks.size()<=20000,"Invalid selection");
+        JSONObject grants=SyncRules.map(s,"grants");JSONArray rows=local.getJSONArray("deliveries");
+        for(Map.Entry<String,Integer> e:tasks.entrySet()){
+            String family=e.getKey(),k=SyncRules.key(cycle,family);
+            SyncRules.require(SyncRules.find(local.getJSONArray("families"),family)!=null,"Missing family");
+            JSONObject old=SyncRules.delivery(local,cycle,family);SyncRules.require("delete".equals(op)?old!=null:old==null,"Delivery changed");
+            if(grants.has(k)){change(s,local,k,op,e.getValue(),actor,reason);continue;}
+            if("delete".equals(op)){for(int i=rows.length()-1;i>=0;i--){JSONObject row=rows.getJSONObject(i);if(cycle.equals(row.getString("c"))&&family.equals(row.getString("f")))rows.remove(i);}audit(s,k,actor,reason,op,old,null);}
+            else{JSONObject row=new JSONObject().put("c",cycle).put("f",family).put("q",e.getValue()).put("by",actor).put("at",Instant.now().toString()).put("motherCorrected",true);rows.put(row);audit(s,k,actor,reason,op,null,row);}
+        }
+        return tasks.size();
+    }
     static void acceptReturns(JSONObject s,String device,JSONObject p,boolean policyOnly)throws Exception{
         if(policyOnly||!p.has("returns"))return;JSONArray a=p.getJSONArray("returns");SyncRules.require(a.length()<=20000,"Too many returns");
         for(int i=0;i<a.length();i++){

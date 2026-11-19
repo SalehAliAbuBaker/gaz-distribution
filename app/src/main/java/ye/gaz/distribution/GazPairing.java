@@ -49,6 +49,10 @@ final class GazPairing {
             JSONObject user=SyncRules.find(local.getJSONArray("users"),admin);PairPackets.require(user!=null&&user.getJSONObject("permissions").optBoolean("admin"),"Admin required");
             MotherDelivery.change(state,local,key,op,q,user.getString("username"),reason);store.commitSync(state,local);}
     }
+    int motherDeliveryBatch(String admin,String cycle,String op,JSONObject requested,String reason)throws Exception{
+        synchronized(store){JSONObject state=status(),local=new JSONObject(store.readState()),user=SyncRules.find(local.getJSONArray("users"),admin);PairPackets.require(user!=null&&user.getJSONObject("permissions").optBoolean("admin"),"Admin required");
+            int count=MotherDelivery.batch(state,local,cycle,op,requested,user.getString("username"),reason);store.commitSync(state,local);return count;}
+    }
     JSONArray allocations()throws Exception{
         synchronized(store){
             JSONObject s=status(),g=SyncRules.map(s,"grants"),out=SyncRules.map(s,"outbox"),acked=SyncRules.map(s,"acked"),receipts=SyncRules.map(s,"receipts");JSONArray rows=new JSONArray();

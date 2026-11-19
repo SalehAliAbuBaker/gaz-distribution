@@ -89,6 +89,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void openDistributorSearchResult(String key){runOnUiThread(()->showDistributorSearchResult(key));}
         @JavascriptInterface public void motherDelivery(String admin,String cycle,String family,String action){runOnUiThread(()->motherDeliveryDialog(admin,cycle,family,action));}
         @JavascriptInterface public void deliveryAudit(String admin){runOnUiThread(()->showDeliveryAudit(admin));}
+        @JavascriptInterface public void motherDeliveryBatch(String admin,String cycle,String action,String json){runOnUiThread(()->motherDeliveryBatchDialog(admin,cycle,action,json));}
         @JavascriptInterface public void centralAccounts(String admin){runOnUiThread(()->centralDevices(admin));}
         @JavascriptInterface public void chooseLoginRole(String admin,String selected){runOnUiThread(()->setupLoginRole(admin,selected));}
         @JavascriptInterface public void refreshAccountPolicy(){runOnUiThread(()->{if(isDistributor())scanQr("policy","device-policy");});}
@@ -290,11 +291,25 @@ public final class MainActivity extends Activity {
             dlg.setOnShowListener(v->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{try{if(!adminAllowed(admin))return;String why=reason.getText().toString().trim();if(why.isEmpty()){reason.setError("أدخل السبب");return;}int q=needsQty?Integer.parseInt(qty.getText().toString()):0;pairing.motherDelivery(admin,key,action,q,why);dlg.dismiss();notifyPairChange();msg("تم اعتماد الإجراء");}catch(Exception e){msg("تعذر الاعتماد؛ تحقق من حالة الحركة والكمية");}}));dlg.show();
         }catch(Exception e){msg("تعذر فتح حركة التسليم");}
     }
+    private void motherDeliveryBatchDialog(String admin,String cycle,String action,String json){
+        if(!adminAllowed(admin))return;
+        try{JSONObject s=pairing.status(),local=new JSONObject(store.readState()),c=SyncRules.find(local.getJSONArray("cycles"),cycle);if(!"mother".equals(s.getString("role"))||c==null||c.optBoolean("closed"))return;
+            boolean deletion="delete".equals(action);if(!deletion&&!"add".equals(action))return;JSONObject requested=new JSONObject(json);int count=requested.length();
+            if(deletion){count=0;JSONArray a=local.getJSONArray("deliveries");for(int i=0;i<a.length();i++)if(cycle.equals(a.getJSONObject(i).getString("c")))count++;}
+            if(count==0){msg("لا توجد حركات محددة");return;}final int expected=count;
+            LinearLayout p=pairLayout();pairText(p,c.getString("title")+" | "+count+" أسرة\n"+(deletion?"ستُحذف جميع حركات الدورة الحالية، مع حفظ سجل التصحيحات والإيصالات الموقعة.":"ستُعتمد الكميات المحددة للأسر المتاحة للأم فقط."));
+            EditText reason=new EditText(this);reason.setHint("سبب الإجراء (مطلوب)");reason.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});p.addView(reason);
+            AlertDialog d=new AlertDialog.Builder(this).setTitle(deletion?"حذف حركات الكشف":"تسليم جماعي من الأم").setView(p).setNegativeButton("إلغاء",null).setPositiveButton("اعتماد",null).create();
+            d.setOnShowListener(v->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{String why=reason.getText().toString().trim();if(why.isEmpty()){reason.setError("أدخل السبب");return;}if(!adminAllowed(admin))return;
+                try{synchronized(store){if(deletion){int current=0;JSONArray a=new JSONObject(store.readState()).getJSONArray("deliveries");for(int i=0;i<a.length();i++)if(cycle.equals(a.getJSONObject(i).getString("c")))current++;if(current!=expected){msg("تغير عدد الحركات؛ أعد فتح الكشف");d.dismiss();return;}}int saved=pairing.motherDeliveryBatch(admin,cycle,action,requested,why);d.dismiss();notifyPairChange();msg("تم اعتماد "+saved+" حركة");}}
+                catch(Exception e){msg("تعذر اعتماد الدفعة؛ لم تُحفظ تغييرات جزئية.");}}));d.show();
+        }catch(Exception e){msg("تعذر فتح الإجراء الجماعي");}
+    }
     private void showDeliveryAudit(String admin){
         if(!adminAllowed(admin))return;
         try{JSONObject s=pairing.status();if(!"mother".equals(s.getString("role")))return;JSONArray log=s.optJSONArray("deliveryAudit");LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.addView(p);
             if(log==null||log.length()==0)pairText(p,"لا توجد تصحيحات إدارية.");
-            else for(int i=log.length()-1;i>=0;i--){JSONObject e=log.getJSONObject(i),g=SyncWire.peek(SyncRules.map(s,"grants").getString(e.getString("key")));JSONObject before=e.optJSONObject("before"),after=e.optJSONObject("after");String a=e.getString("action");String label="edit".equals(a)?"تعديل":"delete".equals(a)?"حذف":"add".equals(a)?"إضافة":"recall".equals(a)?"طلب استرداد":"تأكيد الاسترداد";pairText(p,g.getString("name")+" | "+g.getString("cycleTitle")+"\n"+label+" | "+e.getString("actor")+" | "+e.getString("at")+"\nقبل: "+(before==null?"—":before.optInt("q"))+" | بعد: "+(after==null?"—":after.optInt("q"))+"\nالسبب: "+e.getString("reason"));}
+            else for(int i=log.length()-1;i>=0;i--){JSONObject e=log.getJSONObject(i),g;String k=e.getString("key");JSONObject grants=SyncRules.map(s,"grants");if(grants.has(k))g=SyncWire.peek(grants.getString(k));else{String[] ids=k.split("/");JSONObject local=new JSONObject(store.readState()),f=SyncRules.find(local.getJSONArray("families"),ids[1]),c=SyncRules.find(local.getJSONArray("cycles"),ids[0]);g=new JSONObject().put("name",f==null?ids[1]:f.getString("name")).put("cycleTitle",c==null?ids[0]:c.getString("title"));}JSONObject before=e.optJSONObject("before"),after=e.optJSONObject("after");String a=e.getString("action");String label="edit".equals(a)?"تعديل":"delete".equals(a)?"حذف":"add".equals(a)?"إضافة":"recall".equals(a)?"طلب استرداد":"تأكيد الاسترداد";pairText(p,g.getString("name")+" | "+g.getString("cycleTitle")+"\n"+label+" | "+e.getString("actor")+" | "+e.getString("at")+"\nقبل: "+(before==null?"—":before.optInt("q"))+" | بعد: "+(after==null?"—":after.optInt("q"))+"\nالسبب: "+e.getString("reason"));}
             new AlertDialog.Builder(this).setTitle("سجل تصحيحات التسليم").setView(sc).setPositiveButton("إغلاق",null).show();
         }catch(Exception e){msg("تعذر عرض سجل التصحيحات");}
     }
@@ -302,7 +317,7 @@ public final class MainActivity extends Activity {
         if(!adminAllowed(admin))return;
         try{
             JSONArray rows=pairing.allocations();LinearLayout p=pairLayout();pairText(p,"التخصيصات: "+rows.length());
-            for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);pairText(p,r.getString("cycleTitle")+" | "+r.getString("name")+" | "+r.getString("distributorName")+" — "+(r.getBoolean("done")?"تم التسليم والمزامنة":"بانتظار التسليم"));}
+            for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);pairText(p,r.getString("cycleTitle")+" | "+r.getString("name")+" | "+r.getString("distributorName")+" — "+(r.getBoolean("done")?"تم التسليم":r.optBoolean("managed")?"الصلاحية للأم":r.optBoolean("locked")?"بانتظار تأكيد الاسترداد":"بانتظار التسليم"));}
             ScrollView sc=new ScrollView(this);sc.addView(p);new AlertDialog.Builder(this).setTitle("حالة التخصيصات").setView(sc).setPositiveButton("إغلاق",null).show();
         }catch(Exception e){msg("تعذر عرض التخصيصات");}
     }
