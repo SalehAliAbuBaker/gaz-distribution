@@ -29,6 +29,10 @@ public final class MainActivity extends Activity {
     private static final String HOME="https://appassets.androidplatform.net/assets/index.html";
     private static final int SAVE=21,RESTORE=22,IMPORT_EXCEL=23;
     private WebView web;
+    private RafdLicense license;
+    private RafdPermit activePermit;
+    private final Handler permitHandler=new Handler(Looper.getMainLooper());
+    private final Runnable permitTick=new Runnable(){public void run(){if(web!=null&&!isFinishing()){if(!permitValid()){closeLan();recreate();return;}permitHandler.postDelayed(this,30000L);}}};
     private GazStore store;
     private File pending;
     private String restoreAdmin,excelAdmin;
@@ -44,6 +48,42 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);biometric=new LocalBiometric(this);if(saved!=null)excelAdmin=saved.getString("excelAdmin");
         try{store=new GazStore(this);store.readState();}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر فتح البيانات").setMessage("لم تُحذف بياناتك. راجع الدعم الفني.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
+        try{license=new RafdLicense(this);}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر تحديد هوية الجهاز").setMessage("لم تتغير بياناتك. راجع المطور.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
+        if(!permitValid()){activationScreen();return;}
+        startLicensedApp(saved);
+    }
+    private boolean permitValid(){try{String role=store.role();activePermit=license.verify(role);if("independent".equals(role)&&"distributor".equals(activePermit.role)){String raw=store.readState();if(raw!=null&&!"null".equals(raw)){JSONObject state=new JSONObject(raw);for(String k:new String[]{"families","cycles","deliveries"})if(state.getJSONArray(k).length()!=0)throw new SecurityException("Independent device holds records");}}return true;}catch(Exception e){activePermit=null;return false;}}
+    private boolean licensedRole(String role){return permitValid()&&activePermit.role.equals(role);}
+    private boolean distributorSetupOnly(){return activePermit!=null&&"distributor".equals(activePermit.role)&&!isDistributor();}
+    private String displayPermitDevice(){return RafdPermit.displayCode(license.code);}
+    private void copyPermitDevice(){android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Rafd device",displayPermitDevice()));msg("تم نسخ معرّف الجهاز");}
+    private void sharePermitDevice(){Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,"طلب تصريح تشغيل رفد\\nمعرّف الجهاز: "+displayPermitDevice());startActivity(Intent.createChooser(i,"إرسال معرّف الجهاز"));}
+    private void activationScreen(){
+        LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(p);p.setBackgroundColor(Color.WHITE);
+        TextView title=new TextView(this);title.setText("رفد");title.setTextSize(32);title.setTextColor(Color.rgb(0,94,88));title.setGravity(android.view.Gravity.CENTER);p.addView(title);
+        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.3");
+        pairText(p,"أرسل معرّف الجهاز إلى المطور لطلب التصريح. تظل البيانات محفوظة حتى عند انتهاء التصريح.");
+        TextView code=new TextView(this);code.setText(displayPermitDevice());code.setTextIsSelectable(true);code.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);code.setTextSize(17);code.setGravity(android.view.Gravity.CENTER);p.addView(code);
+        pairButton(p,"نسخ معرّف الجهاز",()->copyPermitDevice());
+        pairButton(p,"مشاركة معرّف الجهاز",()->sharePermitDevice());
+        EditText token=new EditText(this);token.setHint("ألصق كود التصريح هنا");token.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);token.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);token.setMaxLines(5);p.addView(token);
+        pairButton(p,"تفعيل التطبيق",()->activatePermit(token));
+        pairButton(p,"الخروج",()->confirmExit());setContentView(sc);
+    }
+    private void activatePermit(EditText token){
+        try{license.install(token.getText().toString(),store.role());activePermit=license.verify(store.role());token.setText("");msg("تم تفعيل التصريح");recreate();}
+        catch(Exception e){token.setError("التصريح غير صالح لهذا الجهاز أو لدوره، أو انتهت مدته. تحقق من التاريخ والكود.");}
+    }
+    private void showPermitInfo(){
+        if(!permitValid()){recreate();return;}
+        RafdPermit p=activePermit;LinearLayout layout=pairLayout();
+        pairText(layout,"معرّف الجهاز: "+displayPermitDevice()+"\\nنوع التصريح: "+("mother".equals(p.role)?"الجهاز الأم":"موزع")+"\\nالانتهاء: "+(p.expiry==0?"دائم":new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(p.expiry*1000L)))+(p.entity.isEmpty()?"":"\\nالكيان: "+p.entity)+(p.holder.isEmpty()?"":"\\nصاحب الجهاز: "+p.holder));
+        pairButton(layout,"نسخ معرّف الجهاز",()->copyPermitDevice());pairButton(layout,"مشاركة معرّف الجهاز",()->sharePermitDevice());
+        EditText token=new EditText(this);token.setHint("كود تصريح جديد (للتجديد)");token.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);token.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);token.setMaxLines(5);layout.addView(token);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("تصريح التشغيل").setView(layout).setNegativeButton("إغلاق",null).setPositiveButton("تجديد التصريح",null).create();
+        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->activatePermit(token)));dialog.show();
+    }
+    private void startLicensedApp(Bundle saved){
         android.content.SharedPreferences prefs=getSharedPreferences("identity",MODE_PRIVATE);
         device=prefs.getString("id",null);if(device==null){device=UUID.randomUUID().toString();prefs.edit().putString("id",device).commit();}
         try{pairing=new GazPairing(store,device);}catch(Exception e){new AlertDialog.Builder(this).setTitle("تعذر التحقق من هوية الجهاز").setMessage("بياناتك محفوظة. لا تحذف التطبيق.").setPositiveButton("إغلاق",(d,w)->finish()).setCancelable(false).show();return;}
@@ -66,10 +106,12 @@ public final class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(),"GazNative");setContentView(web);web.loadUrl(HOME);
     }
     private final class Bridge {
-        @JavascriptInterface public String readState(){try{return isDistributor()?store.distributorWebState():store.readState();}catch(Exception e){return "";}}
-        @JavascriptInterface public boolean writeState(String json){try{store.writeLocalState(json);return true;}catch(Exception e){return false;}}
+        @JavascriptInterface public String readState(){try{if(!permitValid())return "";return isDistributor()?store.distributorWebState():store.readState();}catch(Exception e){return "";}}
+        @JavascriptInterface public boolean writeState(String json){try{if(!permitValid())return false;if(distributorSetupOnly()){JSONObject n=new JSONObject(json);for(String k:new String[]{"families","cycles","deliveries"})if(n.getJSONArray(k).length()!=0)return false;}store.writeLocalState(json);return true;}catch(Exception e){return false;}}
+        @JavascriptInterface public String licensedRole(){return permitValid()?activePermit.role:"";}
+        @JavascriptInterface public void licenseInfo(){runOnUiThread(()->showPermitInfo());}
         @JavascriptInterface public String deviceId(){return device;}
-        @JavascriptInterface public boolean biometricEnabled(){return biometric!=null&&biometric.enabled();}
+        @JavascriptInterface public boolean biometricEnabled(){return permitValid()&&biometric!=null&&biometric.enabled();}
         @JavascriptInterface public void biometricLogin(){runOnUiThread(()->loginWithBiometric());}
         @JavascriptInterface public void biometricSettings(String id){runOnUiThread(()->MainActivity.this.biometricSettings(id));}
         @JavascriptInterface public void excelTemplate(String admin){runOnUiThread(()->exportExcelTemplate(admin));}
@@ -77,10 +119,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void openContact(String type){runOnUiThread(()->contact(type));}
         @JavascriptInterface public String deviceRole(){try{return store.role();}catch(Exception e){return "locked";}}
         @JavascriptInterface public void manageDevices(String admin){runOnUiThread(()->manageDevicesScreen(admin));}
-        @JavascriptInterface public String allocatedRows(){try{return isDistributor()?"[]":pairing.allocations().toString();}catch(Exception e){return "";} }
+        @JavascriptInterface public String allocatedRows(){try{if(!permitValid())return "[]";return isDistributor()?"[]":pairing.allocations().toString();}catch(Exception e){return "";} }
         @JavascriptInterface public void allocatedDistribution(String admin){runOnUiThread(()->distributorScreen(admin));}
         @JavascriptInterface public synchronized String distributorLogin(String username,String password){
-            try{if(!isDistributor())return "";long now=android.os.SystemClock.elapsedRealtime();if(now-lastLoginAttempt<700&&lastLoginAttempt!=0)return "";lastLoginAttempt=now;
+            try{if(!permitValid()||!isDistributor())return "";long now=android.os.SystemClock.elapsedRealtime();if(now-lastLoginAttempt<700&&lastLoginAttempt!=0)return "";lastLoginAttempt=now;
                 JSONObject u=DistributorUsers.login(store.distributorUsers(),username,password);if(u==null)return "";distributorSessionId=u.getString("id");return DistributorUsers.publicUser(u).toString();
             }catch(Exception e){return "";}
         }
@@ -104,19 +146,21 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean saveBackupEmail(String admin,String email){try{if(isDistributor()||!store.admin(admin))return false;String value=email==null?"":email.trim();if(!value.isEmpty()&&(value.length()>254||!android.util.Patterns.EMAIL_ADDRESS.matcher(value).matches()))return false;return getSharedPreferences("gaz_backup_destination",MODE_PRIVATE).edit().putString("email",value).commit();}catch(Exception e){return false;}}
         @JavascriptInterface public void cloudBackup(String admin){runOnUiThread(()->chooseCloudBackup(admin));}
         @JavascriptInterface public void restore(String admin){runOnUiThread(()->{if(!backupAllowed(admin))return;closeLan();restoreAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(i,RESTORE);}catch(Exception e){restoreAdmin=null;msg("تعذر فتح الملفات");}});}
-        @JavascriptInterface public void shareText(String text){if(isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
-        @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,0);}
-        @JavascriptInterface public void shareDocument(String name,String mime,String b64){if(isDistributor())return;document(name,mime,b64,1);}
-        @JavascriptInterface public void printDocument(String name,String b64){if(isDistributor())return;document(name,"application/pdf",b64,2);}
+        @JavascriptInterface public void shareText(String text){if(!licensedRole("mother")||isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
+        @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(!licensedRole("mother")||isDistributor())return;document(name,mime,b64,0);}
+        @JavascriptInterface public void shareDocument(String name,String mime,String b64){if(!licensedRole("mother")||isDistributor())return;document(name,mime,b64,1);}
+        @JavascriptInterface public void printDocument(String name,String b64){if(!licensedRole("mother")||isDistributor())return;document(name,"application/pdf",b64,2);}
     }
     private boolean isDistributor(){try{return "distributor".equals(store.role());}catch(Exception e){return false;}}
-    private JSONObject sessionUser()throws Exception{String id=distributorSessionId;return id==null||!isDistributor()?null:DistributorUsers.find(store.distributorUsers(),id);}
+    private JSONObject sessionUser()throws Exception{String id=distributorSessionId;return id==null||!permitValid()||!isDistributor()?null:DistributorUsers.find(store.distributorUsers(),id);}
     private boolean distributorAllowed(String permission){
+        if(!permitValid()||!"distributor".equals(activePermit.role))return false;
         try{if(DistributorUsers.allowed(sessionUser(),permission))return true;}catch(Exception ignored){}
         msg("لا توجد صلاحية لتنفيذ هذا الإجراء");return false;
     }
     private boolean syncAllowed(String id){return isDistributor()?distributorAllowed("sync"):adminAllowed(id);}
     private boolean adminAllowed(String admin){
+        if(!permitValid())return false;
         if(isDistributor())return distributorAllowed("admin");
         try{if(admin!=null&&store.admin(admin))return true;}catch(Exception ignored){}
         msg("يلزم حساب مدير الجهاز");return false;
@@ -135,8 +179,8 @@ public final class MainActivity extends Activity {
             AlertDialog d=new AlertDialog.Builder(this).setTitle("إدارة الجوالات").setView(scroll).setPositiveButton("إغلاق",null).create();
             if(role.equals("independent")){
                 pairText(p,"هذا الجهاز مستقل الآن.");
-                pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف الجهاز الأم لإدارة الكيان أو المرفق وربط الموزعين. نقل صلاحية الجهاز الأم إلى جهاز آخر غير متاح حاليًا؛ احفظ نسخة احتياطية قبل الربط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من وجود حساب مدير وحالة الربط");}}).show());
-                pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر والدورات والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
+                if(licensedRole("mother"))pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف الجهاز الأم لإدارة الكيان أو المرفق وربط الموزعين. نقل صلاحية الجهاز الأم إلى جهاز آخر غير متاح حاليًا؛ احفظ نسخة احتياطية قبل الربط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin)||!licensedRole("mother"))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من وجود حساب مدير وحالة الربط");}}).show());
+                if(licensedRole("distributor"))pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر والدورات والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin)||!licensedRole("distributor"))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
             }else if(role.equals("pending")){
                 pairText(p,"بانتظار موافقة الجوال الأم.");
                 pairButton(p,"عرض طلب الربط QR",()->{try{showQr("طلب ربط الموزع",s.getString("request"),pairing.fingerprint(),"امسح الطلب بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر عرض الرمز");}});
@@ -170,9 +214,9 @@ public final class MainActivity extends Activity {
     private void setupLoginRole(String admin,String selected){
         if(!adminAllowed(admin))return;
         try{if(!"independent".equals(store.role()))return;
-            if("distributor".equals(selected)){manageDevicesScreen(admin);return;}
+            if(!licensedRole(selected)){msg("نوع الجهاز لا يطابق التصريح الصادر");return;}if("distributor".equals(selected)){manageDevicesScreen(admin);return;}
             if(!"mother".equals(selected))return;
-            new AlertDialog.Builder(this).setTitle("تعيين الجهاز الأم").setMessage("هل تريد تعيين هذا الجهاز جهازًا أم لإدارة الكيان أو المرفق؟ لا يُشترط إدخال اسم الكيان. لا يمكن تغيير الدور من شاشة الدخول بعد الاقتران.").setNegativeButton("لاحقًا",null).setPositiveButton("تعيين الأم",(v,w)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();notifyPairChange();}catch(Exception e){msg("تعذر تعيين الجهاز الأم؛ تحقق من حالة الربط وصلاحية المدير");}}).show();
+            new AlertDialog.Builder(this).setTitle("تعيين الجهاز الأم").setMessage("هل تريد تعيين هذا الجهاز جهازًا أم لإدارة الكيان أو المرفق؟ لا يُشترط إدخال اسم الكيان. لا يمكن تغيير الدور من شاشة الدخول بعد الاقتران.").setNegativeButton("لاحقًا",null).setPositiveButton("تعيين الأم",(v,w)->{try{if(!adminAllowed(admin)||!licensedRole("mother"))return;pairing.becomeMother();notifyPairChange();}catch(Exception e){msg("تعذر تعيين الجهاز الأم؛ تحقق من حالة الربط وصلاحية المدير");}}).show();
         }catch(Exception e){msg("تعذر التحقق من نوع الجهاز");}
     }
     private void centralDevices(String admin){
@@ -402,6 +446,7 @@ public final class MainActivity extends Activity {
             pairButton(p,"تحديث صلاحياتي من الجوال الأم",()->{d.dismiss();scanQr("policy","device-policy");});
             if(DistributorUsers.allowed(user,"sync"))pairButton(p,"المزامنة بعنوان IP (احتياطي)",()->{d.dismiss();connectLan(user.optString("id"));});
             pairButton(p,"الدخول بالبصمة",()->{d.dismiss();biometricSettings(user.optString("id"));});
+            pairButton(p,"تصريح التشغيل",()->{d.dismiss();showPermitInfo();});
             pairButton(p,"حول التطبيق والدعم",()->showContact());
             pairText(p,"إدارة التخصيص والاستعادة ونقل السلطة من الجوال الأم غير متاحة للموزع.");
             d.show();
@@ -490,7 +535,7 @@ public final class MainActivity extends Activity {
                 new AlertDialog.Builder(this).setTitle("قبول الموزع؟").setMessage("الاسم: "+r.getString("name")+"\nالبصمة: "+fp+"\nقارن البصمة بالتي تظهر على جوال الموزع نفسه. لا توافق إن اختلفت.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;String approval=pairing.approve(packet);notifyPairChange();showQr("موافقة الجوال الأم",approval,pairing.fingerprint(),"امسح هذا الرمز من جهاز الموزع وقارن بصمة الأم.");}catch(Exception e){msg("رفض الطلب؛ تعارض أو جهاز مسجل سابقًا");}}).show();
             }else if(mode.equals("approval")){
                 JSONObject r=pairing.inspectApproval(packet);String fp=PairPackets.shortFingerprint(r.getString("pub"));
-                new AlertDialog.Builder(this).setTitle("تأكيد الجوال الأم").setMessage("نطاق الربط: "+r.getString("area")+"\nبصمة الأم: "+fp+"\nقارنها بالبصمة المعروضة على الجوال الأم.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin))return;pairing.accept(packet);notifyPairChange();msg("تم اعتماد هوية الجوال الأم؛ الصرف مقفل حتى التخصيص");}catch(Exception e){msg("تعذر اعتماد الموافقة");}}).show();
+                new AlertDialog.Builder(this).setTitle("تأكيد الجوال الأم").setMessage("نطاق الربط: "+r.getString("area")+"\nبصمة الأم: "+fp+"\nقارنها بالبصمة المعروضة على الجوال الأم.").setNegativeButton("إلغاء",null).setPositiveButton("البصمة متطابقة",(d,w)->{try{if(!adminAllowed(admin)||!licensedRole("distributor"))return;pairing.accept(packet);notifyPairChange();msg("تم اعتماد هوية الجوال الأم؛ الصرف مقفل حتى التخصيص");}catch(Exception e){msg("تعذر اعتماد الموافقة");}}).show();
             }
         }catch(Exception e){msg("الرمز غير صالح أو لا يخص هذا الجهاز");}
     }
@@ -589,6 +634,7 @@ public final class MainActivity extends Activity {
         });
     }
     private boolean backupAllowed(String admin){
+        if(!licensedRole("mother"))return false;
         try{String role=store.role();if(("mother".equals(role)||"independent".equals(role))&&adminAllowed(admin))return true;}catch(Exception ignored){}
         msg("يلزم حساب مدير الجوال الأم أو الجهاز المستقل");return false;
     }
@@ -638,5 +684,7 @@ public final class MainActivity extends Activity {
     private AlertDialog exitDialog;
     private void confirmExit(){if(isFinishing()||isDestroyed()||(exitDialog!=null&&exitDialog.isShowing()))return;exitDialog=new AlertDialog.Builder(this).setTitle("تأكيد الخروج").setMessage("هل تريد الخروج من تطبيق رفد؟").setNegativeButton("البقاء",null).setPositiveButton("خروج",(dialog,which)->finishAndRemoveTask()).create();exitDialog.show();}
     @Override public void onBackPressed(){if(backCheckPending||(exitDialog!=null&&exitDialog.isShowing()))return;if(web==null){confirmExit();return;}backCheckPending=true;web.evaluateJavascript("(function(){try{return typeof window.rafdHandleBack==='function'&&window.rafdHandleBack();}catch(e){return false;}})()",result->{backCheckPending=false;if(!"true".equals(result))confirmExit();});}
-    @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}closeLan();network.shutdownNow();workers.shutdown();super.onDestroy();}
+    @Override protected void onResume(){super.onResume();if(web!=null){if(!permitValid()){closeLan();recreate();return;}permitHandler.removeCallbacks(permitTick);permitHandler.postDelayed(permitTick,30000L);}}
+    @Override protected void onPause(){permitHandler.removeCallbacks(permitTick);super.onPause();}
+    @Override protected void onDestroy(){permitHandler.removeCallbacks(permitTick);if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}closeLan();network.shutdownNow();workers.shutdown();super.onDestroy();}
 }
