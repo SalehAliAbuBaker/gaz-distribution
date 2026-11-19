@@ -26,11 +26,11 @@ final class BeneficiaryExcel {
             add(z,"xl/workbook.xml","<workbook xmlns=\""+NS+"\" xmlns:r=\""+REL+"\"><bookViews><workbookView/></bookViews><sheets><sheet name=\"المستفيدون\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
             add(z,"xl/_rels/workbook.xml.rels","<Relationships xmlns=\""+PKG+"\"><Relationship Id=\"rId1\" Type=\""+REL+"/worksheet\" Target=\"worksheets/sheet1.xml\"/><Relationship Id=\"rId2\" Type=\""+REL+"/styles\" Target=\"styles.xml\"/></Relationships>");
             add(z,"xl/styles.xml","<styleSheet xmlns=\""+NS+"\"><fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Arial\"/></font><font><b/><sz val=\"11\"/><color rgb=\"FFFFFFFF\"/><name val=\"Arial\"/></font></fonts><fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill><fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF084890\"/><bgColor indexed=\"64\"/></patternFill></fill></fills><borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs><cellXfs count=\"3\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/><xf numFmtId=\"0\" fontId=\"1\" fillId=\"2\" borderId=\"0\" xfId=\"0\" applyFill=\"1\" applyFont=\"1\"/><xf numFmtId=\"49\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/></cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>");
-            StringBuilder s=new StringBuilder("<worksheet xmlns=\""+NS+"\"><dimension ref=\"A1:I101\"/><sheetViews><sheetView rightToLeft=\"1\" workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight=\"21\"/><cols>");int[] w={36,30,15,24,22,20,20,24,36};
+            StringBuilder s=new StringBuilder("<worksheet xmlns=\""+NS+"\"><dimension ref=\"A1:I101\"/><sheetViews><sheetView rightToLeft=\"1\" workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight=\"21\"/><cols>");int[] w={36,30,15,24,22,20,28,24,36};
             for(int i=0;i<9;i++)s.append("<col min=\"").append(i+1).append("\" max=\"").append(i+1).append("\" width=\"").append(w[i]).append("\" customWidth=\"1\"/>");
             s.append("</cols><sheetData><row r=\"1\" ht=\"28\" customHeight=\"1\">");
             for(int i=0;i<9;i++)s.append("<c r=\"").append((char)('A'+i)).append("1\" s=\"1\" t=\"inlineStr\"><is><t>").append(xml(HEAD[i])).append("</t></is></c>");
-            s.append("</row>");for(int row=2;row<=101;row++){s.append("<row r=\"").append(row).append("\">");for(int i=0;i<9;i++)s.append("<c r=\"").append((char)('A'+i)).append(row).append("\" s=\"").append(i==5||i==6?0:2).append("\"/>");s.append("</row>");}
+            s.append("</row>");for(int row=2;row<=101;row++){s.append("<row r=\"").append(row).append("\">");for(int i=0;i<9;i++)s.append("<c r=\"").append((char)('A'+i)).append(row).append("\" s=\"").append(i==5?0:2).append("\"/>");s.append("</row>");}
             s.append("</sheetData><autoFilter ref=\"A1:I101\"/></worksheet>");add(z,"xl/worksheets/sheet1.xml",s.toString());
         }return bytes.toByteArray();
     }
@@ -80,10 +80,10 @@ final class BeneficiaryExcel {
         for(int i=0;i<input.length();i++){JSONObject x=input.getJSONObject(i);int row=x.getInt("row");try{
             String name=x.getString("name").trim(),house=x.getString("house").trim();check(!name.isEmpty(),"الاسم مطلوب");check(name.length()<=200&&house.length()<=200&&x.getString("square").length()<=80&&x.getString("area").length()<=100&&x.getString("phone").length()<=50&&x.getString("categories").length()<=300&&x.getString("notes").length()<=1000,"إحدى القيم طويلة جدًا");
             int members=boundedNumber(digit(x.getString("members"))).intValueExact();check(members>=1&&members<=1000,"عدد أفراد الأسرة غير صالح");
-            String need=x.getString("need");if(!need.isEmpty()){java.math.BigDecimal n=boundedNumber(digit(need));check(n.signum()>=0&&n.compareTo(java.math.BigDecimal.valueOf(100))<=0,"نسبة الاحتياج من 0 إلى 100");need=n.stripTrailingZeros().toPlainString();}
+            String need=x.getString("need").trim();check(need.length()<=200,"نسبة الاحتياج لا تتجاوز 200 حرف");
             check(names.add(AllocationSelection.norm(name)),"اسم مكرر داخل الملف أو التطبيق");
             JSONObject f=new JSONObject();for(String k:KEYS)f.put(k,x.getString(k));f.put("name",name).put("house",house).put("members",members).put("need",need).put("row",row);valid.put(f);
-        }catch(Exception e){String msg=e instanceof IOException?e.getMessage():"عدد الأفراد أو نسبة الاحتياج غير صالح";errors.put("الصف "+row+": "+msg);}}
+        }catch(Exception e){String msg=e instanceof IOException?e.getMessage():"عدد أفراد الأسرة غير صالح";errors.put("الصف "+row+": "+msg);}}
         return new JSONObject().put("valid",valid).put("errors",errors);
     }
     static int append(JSONObject data,JSONArray input)throws Exception{

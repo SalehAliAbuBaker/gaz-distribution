@@ -358,14 +358,18 @@ public final class MainActivity extends Activity {
         String op=r.optString("operator","");
         return "تم التسليم: "+r.optInt("q")+" | "+(r.optBoolean("synced")?"تمت المزامنة":"بانتظار المزامنة")+(at.isEmpty()?"":"\n"+at)+(op.isEmpty()?"":" | "+op);
     }
-    private void readDistributorRows(boolean history){
+    private void readDistributorRows(boolean history){pagedDistributorRows(history,false,null);}
+    private void pagedDistributorRows(boolean history,boolean deliver,String admin){
+        if(!distributorAllowed(deliver?"deliver":history?"history":"view"))return;
         try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو رابط الأسرة أو المربع أو الدورة");p.addView(search);
-            LinearLayout list=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(list);p.addView(scroll,new LinearLayout.LayoutParams(-1,(int)(380*getResources().getDisplayMetrics().density)));
-            Runnable draw=()->{list.removeAllViews();int count=0;String query=DistributorUsers.normalize(search.getText().toString());for(int i=0;i<all.length();i++){JSONObject r=all.optJSONObject(i);if(r==null||(history&&!r.optBoolean("done")))continue;
-                String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | مربع "+r.optString("square","")+" | "+r.optString("cycleTitle");if(!DistributorUsers.normalize(label).contains(query))continue;count++;pairText(list,label+"\n"+deliveryDescription(r));}
-                if(count==0)pairText(list,history?"لا توجد حركات تسليم مطابقة":"لا توجد أسر مطابقة");};
-            search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable e){}});draw.run();
-            new AlertDialog.Builder(this).setTitle(history?"سجل التسليم":"الأسر المخصصة").setView(p).setPositiveButton("إغلاق",null).show();
+            LinearLayout list=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(list);int height=(int)(Math.min(340,getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density*0.38f)*getResources().getDisplayMetrics().density);p.addView(scroll,new LinearLayout.LayoutParams(-1,height));
+            LinearLayout nav=new LinearLayout(this);Button prev=new Button(this),next=new Button(this);TextView info=new TextView(this);prev.setText("السابق");next.setText("التالي");nav.addView(prev,new LinearLayout.LayoutParams(0,-2,1));nav.addView(info,new LinearLayout.LayoutParams(0,-2,2));nav.addView(next,new LinearLayout.LayoutParams(0,-2,1));info.setGravity(android.view.Gravity.CENTER);p.addView(nav);
+            AlertDialog dlg=new AlertDialog.Builder(this).setTitle(deliver?"تسجيل التوزيع":history?"سجل التسليم":"الأسر المخصصة").setView(p).setPositiveButton("إغلاق",null).create();int[] page={0};
+            Runnable draw=()->{list.removeAllViews();java.util.ArrayList<JSONObject> matches=new java.util.ArrayList<>();String query=AllocationSelection.norm(search.getText().toString());for(int i=0;i<all.length();i++){JSONObject r=all.optJSONObject(i);if(r==null||(history&&!r.optBoolean("done")))continue;String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | "+r.optString("square")+" | "+r.optString("cycleTitle");if(AllocationSelection.norm(label).contains(query))matches.add(r);}
+                int pages=Math.max(1,(matches.size()+29)/30);page[0]=Math.max(0,Math.min(page[0],pages-1));int startIndex=page[0]*30,endIndex=Math.min(matches.size(),startIndex+30);
+                for(int i=startIndex;i<endIndex;i++){JSONObject r=matches.get(i);pairText(list,r.optInt("no")+" · "+r.optString("name")+" | رابط الأسرة: "+r.optString("house")+" | مربع "+r.optString("square")+" | "+r.optString("cycleTitle")+"\n"+deliveryDescription(r));if(deliver&&!r.optBoolean("done")&&!r.optBoolean("locked"))pairButton(list,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});}
+                if(matches.isEmpty())pairText(list,"لا توجد أسر مطابقة");info.setText("صفحة "+(page[0]+1)+" / "+pages+" | "+matches.size());prev.setEnabled(page[0]>0);next.setEnabled(page[0]+1<pages);nav.setVisibility(pages>1?android.view.View.VISIBLE:android.view.View.GONE);scroll.scrollTo(0,0);};
+            prev.setOnClickListener(v->{page[0]--;draw.run();});next.setOnClickListener(v->{page[0]++;draw.run();});search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){page[0]=0;draw.run();}public void afterTextChanged(android.text.Editable e){}});draw.run();dlg.show();dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         }catch(Exception e){msg("تعذر قراءة السجل");}
     }
     private void distributorReports(){
@@ -425,21 +429,7 @@ public final class MainActivity extends Activity {
             JSONObject perms=new JSONObject();for(int i=0;i<checks.length;i++)perms.put(DistributorUsers.PERMS[i],checks[i].isChecked());store.saveDistributorUser(distributorSessionId,old==null?null:old.getString("id"),name.getText().toString(),password.getText().toString(),perms);d.dismiss();notifyPairChange();distributorUserList();msg("تم حفظ المستخدم وصلاحياته");
             }catch(Exception e){msg("تعذر الحفظ؛ تحقق من الاسم ورمز المرور والصلاحيات");}}));d.show();
     }
-    private void distributorScreen(String admin){
-        if(!distributorAllowed("deliver"))return;
-        try{
-            PairPackets.require("distributor".equals(store.role()),"Distributor required");JSONArray rows=pairing.allocations();
-            LinearLayout p=pairLayout();pairText(p,"الأسر المخصصة: "+rows.length());
-            ScrollView sc=new ScrollView(this);sc.addView(p);AlertDialog dlg=new AlertDialog.Builder(this).setTitle("تسجيل التوزيع").setView(sc).setPositiveButton("إغلاق",null).create();
-            if(rows.length()==0)pairText(p,"لا توجد أسر مخصصة بعد. نفّذ المزامنة أولًا.");
-            for(int i=0;i<rows.length();i++){JSONObject r=rows.getJSONObject(i);
-                pairText(p,r.getString("cycleTitle")+" | "+r.getInt("no")+" · "+r.getString("name")+" | رابط الأسرة: "+(r.optString("house").isEmpty()?"—":r.optString("house"))+" | مربع "+r.optString("square","")+" | الحد "+r.getInt("maxQty"));
-                if(r.getBoolean("done"))pairText(p,deliveryDescription(r));
-                else if(r.optBoolean("locked"))pairText(p,deliveryDescription(r));else pairButton(p,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});
-            }
-            dlg.show();
-        }catch(Exception e){msg("تعذر فتح الأسر المخصصة");}
-    }
+    private void distributorScreen(String admin){pagedDistributorRows(false,true,admin);}
     private void recordDelivery(String admin,JSONObject row){
         if(!distributorAllowed("deliver"))return;
         EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+row.optInt("maxQty"));

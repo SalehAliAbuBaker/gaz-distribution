@@ -45,19 +45,19 @@ jobs:
           bt="$ANDROID_HOME/build-tools/34.0.0"
           apk="app/build/outputs/apk/release/app-release-unsigned.apk"
           "$bt/zipalign" -c 4 "$apk"
-          "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias gaz --ks-pass env:GAZ_KEYSTORE_PASSWORD --key-pass env:GAZ_KEYSTORE_PASSWORD --out Gaz-Distribution-0.2.15-pairing-test.apk "$apk"
-          "$bt/apksigner" verify --print-certs Gaz-Distribution-0.2.15-pairing-test.apk > cert.txt
+          "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias gaz --ks-pass env:GAZ_KEYSTORE_PASSWORD --key-pass env:GAZ_KEYSTORE_PASSWORD --out Gaz-Distribution-0.2.16-pairing-test.apk "$apk"
+          "$bt/apksigner" verify --print-certs Gaz-Distribution-0.2.16-pairing-test.apk > cert.txt
           actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' cert.txt | tr '[:upper:]' '[:lower:]')"
           expected="$(printf '%s' "$GAZ_SIGNER_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
           test "${#actual}" = 64 && test "$actual" = "$expected" || { echo "Signer differs from pinned fingerprint"; exit 1; }
-          "$bt/aapt" dump badging Gaz-Distribution-0.2.15-pairing-test.apk > badging.txt
+          "$bt/aapt" dump badging Gaz-Distribution-0.2.16-pairing-test.apk > badging.txt
           grep -F "package: name='ye.gaz.distribution'" badging.txt
-          grep -F "versionName='0.2.15'" badging.txt
+          grep -F "versionName='0.2.16'" badging.txt
           if grep -q 'application-debuggable' badging.txt; then echo "Release APK must not be debuggable"; exit 1; fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Gaz-Distribution-0.2.15-pairing-test-signed
-          path: Gaz-Distribution-0.2.15-pairing-test.apk
+          name: Gaz-Distribution-0.2.16-pairing-test-signed
+          path: Gaz-Distribution-0.2.16-pairing-test.apk
           if-no-files-found: error
   publish:
     needs: signed
@@ -70,10 +70,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Gaz-Distribution-0.2.15-pairing-test-signed
+          name: Gaz-Distribution-0.2.16-pairing-test-signed
       - name: Publish signed pairing test
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view v0.2.15-pairing-test >/dev/null 2>&1; then echo "Existing signed release is immutable"; exit 1; fi
-          gh release create v0.2.15-pairing-test Gaz-Distribution-0.2.15-pairing-test.apk --target "$GITHUB_SHA" --prerelease --title "Gaz Distribution 0.2.15 — signed pairing test" --notes "اختبار الاقتران فقط ببيانات وهمية. لا مزامنة ولا صرف من الموزع. وقّع بمفتاح المالك الدائم. قد يلزم انتقال أخير من 0.2.1 بالنسخ الاحتياطي والاستعادة قبل اختيار دور الجهاز."
+          if gh release view v0.2.16-pairing-test >/dev/null 2>&1; then echo "Existing signed release is immutable"; exit 1; fi
+          gh release create v0.2.16-pairing-test Gaz-Distribution-0.2.16-pairing-test.apk --target "$GITHUB_SHA" --prerelease --title "Gaz Distribution 0.2.16 — signed pairing test" --notes "اختبار الاقتران فقط ببيانات وهمية. لا مزامنة ولا صرف من الموزع. وقّع بمفتاح المالك الدائم. قد يلزم انتقال أخير من 0.2.1 بالنسخ الاحتياطي والاستعادة قبل اختيار دور الجهاز."

@@ -29,4 +29,9 @@ public class BeneficiaryExcelTest {
         JSONArray rows=new JSONArray().put(row(2,"اسم أول").put("house","")).put(row(3,"اسم ثان").put("house","أسرة آل سالم"));
         assertEquals(2,BeneficiaryExcel.append(data,rows));assertEquals("",data.getJSONArray("families").getJSONObject(0).getString("house"));assertEquals("أسرة آل سالم",data.getJSONArray("families").getJSONObject(1).getString("house"));
     }
+    @Test public void needAcceptsTextNumberAndBlank()throws Exception{
+        JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",0);
+        JSONArray rows=new JSONArray().put(row(2,"اسم أول").put("need","شديدة")).put(row(3,"اسم ثان").put("need","٨٠٪")).put(row(4,"اسم ثالث").put("need",""));
+        assertEquals(3,BeneficiaryExcel.append(data,rows));JSONArray f=data.getJSONArray("families");assertEquals("شديدة",f.getJSONObject(0).getString("need"));assertEquals("٨٠٪",f.getJSONObject(1).getString("need"));assertEquals("",f.getJSONObject(2).getString("need"));
+    }
 }
