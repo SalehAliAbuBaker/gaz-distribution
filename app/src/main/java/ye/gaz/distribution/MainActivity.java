@@ -389,7 +389,7 @@ public final class MainActivity extends Activity {
         try{Intent i;switch(type){case "phone":i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:+967734915588"));break;case "whatsapp":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588"));break;case "feedback":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588").buildUpon().appendQueryParameter("text","السلام عليكم، لدي مقترح أو ملاحظة بشأن تطبيق رفد:").build());break;case "email":i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saleh0129@gmail.com"));break;default:return;}startActivity(i);}catch(Exception e){msg("تعذر فتح تطبيق التواصل");}
     }
     private void showContact(){
-        LinearLayout p=pairLayout();pairText(p,"رفد – لإدارة المساعدات وتوزيعها\nتطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة للمطور.");
+        LinearLayout p=pairLayout();pairText(p,"رفد – لإدارة المساعدات وتنظيمها\nتطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة للمطور.");
         pairButton(p,"اتصال هاتفي: +967 734 915 588",()->contact("phone"));pairButton(p,"واتساب: +967 734 915 588",()->contact("whatsapp"));pairButton(p,"البريد: saleh0129@gmail.com",()->contact("email"));
         new AlertDialog.Builder(this).setTitle("حول التطبيق والدعم").setView(p).setPositiveButton("إغلاق",null).show();
     }
