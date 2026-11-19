@@ -130,12 +130,12 @@ public final class MainActivity extends Activity {
         try{
             JSONObject s=pairing.status();String role=s.optString("role","independent");
             LinearLayout p=pairLayout();pairText(p,"معرّف بصمة الجهاز: "+pairing.fingerprint());
-            pairText(p,"مزامنة محلية تجريبية عبر Wi-Fi — بيانات وهمية فقط.");
+            pairText(p,"المزامنة المحلية عبر Wi-Fi");
             ScrollView scroll=new ScrollView(this);scroll.addView(p);
             AlertDialog d=new AlertDialog.Builder(this).setTitle("إدارة الجوالات").setView(scroll).setPositiveButton("إغلاق",null).create();
             if(role.equals("independent")){
                 pairText(p,"هذا الجهاز مستقل الآن.");
-                pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف مالك هوية الحارة؛ نقل السلطة والاستعادة على جهاز مقترن غير متاحين بعد. للتجربة ببيانات وهمية فقط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من حفظ اسم الحارة ووجود حساب مدير");}}).show());
+                pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف مالك هوية الحارة؛ نقل السلطة والاستعادة على جهاز مقترن غير متاحين بعد. احفظ نسخة احتياطية خارج الجهاز قبل الربط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من حفظ اسم الحارة ووجود حساب مدير");}}).show());
                 pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر والدورات والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
             }else if(role.equals("pending")){
                 pairText(p,"بانتظار موافقة الجوال الأم.");
