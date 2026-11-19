@@ -146,10 +146,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean saveBackupEmail(String admin,String email){try{if(isDistributor()||!store.admin(admin))return false;String value=email==null?"":email.trim();if(!value.isEmpty()&&(value.length()>254||!android.util.Patterns.EMAIL_ADDRESS.matcher(value).matches()))return false;return getSharedPreferences("gaz_backup_destination",MODE_PRIVATE).edit().putString("email",value).commit();}catch(Exception e){return false;}}
         @JavascriptInterface public void cloudBackup(String admin){runOnUiThread(()->chooseCloudBackup(admin));}
         @JavascriptInterface public void restore(String admin){runOnUiThread(()->{if(!backupAllowed(admin))return;closeLan();restoreAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(i,RESTORE);}catch(Exception e){restoreAdmin=null;msg("تعذر فتح الملفات");}});}
-        @JavascriptInterface public void shareText(String text){if(!licensedRole("mother")||isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
-        @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(!licensedRole("mother")||isDistributor())return;document(name,mime,b64,0);}
-        @JavascriptInterface public void shareDocument(String name,String mime,String b64){if(!licensedRole("mother")||isDistributor())return;document(name,mime,b64,1);}
-        @JavascriptInterface public void printDocument(String name,String b64){if(!licensedRole("mother")||isDistributor())return;document(name,"application/pdf",b64,2);}
+        @JavascriptInterface public void shareText(String text){if(!MainActivity.this.licensedRole("mother")||isDistributor())return;runOnUiThread(()->{Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,text);startActivity(Intent.createChooser(i,"مشاركة الكشف"));});}
+        @JavascriptInterface public void exportDocument(String name,String mime,String b64){if(!MainActivity.this.licensedRole("mother")||isDistributor())return;document(name,mime,b64,0);}
+        @JavascriptInterface public void shareDocument(String name,String mime,String b64){if(!MainActivity.this.licensedRole("mother")||isDistributor())return;document(name,mime,b64,1);}
+        @JavascriptInterface public void printDocument(String name,String b64){if(!MainActivity.this.licensedRole("mother")||isDistributor())return;document(name,"application/pdf",b64,2);}
     }
     private boolean isDistributor(){try{return "distributor".equals(store.role());}catch(Exception e){return false;}}
     private JSONObject sessionUser()throws Exception{String id=distributorSessionId;return id==null||!permitValid()||!isDistributor()?null:DistributorUsers.find(store.distributorUsers(),id);}
@@ -520,7 +520,7 @@ public final class MainActivity extends Activity {
         network.execute(()->{try{long before=pairing.accountRevision();pairing.synchronize(this,ip,policyOnly);boolean changed=pairing.accountRevision()!=before;runOnUiThread(()->{busy.dismiss();if(changed)distributorSessionId=null;notifyPairChange();msg(changed?"تم تحديث الصلاحيات؛ سجل الدخول مجددًا":policyOnly?"تم تحديث الحسابات":"تمت المزامنة بنجاح");});}
             catch(Exception e){runOnUiThread(()->{busy.dismiss();new AlertDialog.Builder(this).setTitle("لم تكتمل المزامنة").setMessage(GazLan.diagnostic(e)+"\nحركاتك محفوظة. أرسل صورة هذه الرسالة عند تكرار المشكلة.").setPositiveButton("إغلاق",null).show();});}});
     }
-    @Override protected void onPause(){closeLan();super.onPause();}
+
     private void scanQr(String mode,String admin){
         if("policy".equals(mode)?!isDistributor():"sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
         scanMode=mode;scanAdmin=admin;
@@ -685,6 +685,6 @@ public final class MainActivity extends Activity {
     private void confirmExit(){if(isFinishing()||isDestroyed()||(exitDialog!=null&&exitDialog.isShowing()))return;exitDialog=new AlertDialog.Builder(this).setTitle("تأكيد الخروج").setMessage("هل تريد الخروج من تطبيق رفد؟").setNegativeButton("البقاء",null).setPositiveButton("خروج",(dialog,which)->finishAndRemoveTask()).create();exitDialog.show();}
     @Override public void onBackPressed(){if(backCheckPending||(exitDialog!=null&&exitDialog.isShowing()))return;if(web==null){confirmExit();return;}backCheckPending=true;web.evaluateJavascript("(function(){try{return typeof window.rafdHandleBack==='function'&&window.rafdHandleBack();}catch(e){return false;}})()",result->{backCheckPending=false;if(!"true".equals(result))confirmExit();});}
     @Override protected void onResume(){super.onResume();if(web!=null){if(!permitValid()){closeLan();recreate();return;}permitHandler.removeCallbacks(permitTick);permitHandler.postDelayed(permitTick,30000L);}}
-    @Override protected void onPause(){permitHandler.removeCallbacks(permitTick);super.onPause();}
+    @Override protected void onPause(){permitHandler.removeCallbacks(permitTick);closeLan();super.onPause();}
     @Override protected void onDestroy(){permitHandler.removeCallbacks(permitTick);if(web!=null){web.removeJavascriptInterface("GazNative");web.destroy();}closeLan();network.shutdownNow();workers.shutdown();super.onDestroy();}
 }

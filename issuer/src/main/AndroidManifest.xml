@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<application android:label="تصاريح رفد" android:icon="@drawable/issuer_icon" android:allowBackup="false" android:fullBackupContent="false" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+<activity android:name=".IssuerActivity" android:exported="true" android:windowSoftInputMode="adjustResize"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+</application></manifest>

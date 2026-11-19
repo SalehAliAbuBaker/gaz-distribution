@@ -34,7 +34,7 @@ jobs:
           test -f "$sdk/platforms/android-34/android.jar"
           echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
       - name: Build debug APK
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :issuer:assembleRelease
       - name: Verify APK and compare previous test signature
         id: signer
         shell: bash
@@ -76,4 +76,19 @@ jobs:
         with:
           name: Rafd-1.0.3-offline-signing-input
           path: signing-input/
+          if-no-files-found: error
+      - name: Prepare issuer offline signing package
+        shell: bash
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/34.0.0"
+          mkdir -p issuer-signing-input
+          "$bt/zipalign" -f -p 4 issuer/build/outputs/apk/release/issuer-release-unsigned.apk issuer-signing-input/rafd-issuer-unsigned-aligned.apk
+          "$bt/zipalign" -c 4 issuer-signing-input/rafd-issuer-unsigned-aligned.apk
+          cp "$bt/lib/apksigner.jar" issuer-signing-input/apksigner.jar
+          (cd issuer-signing-input && sha256sum rafd-issuer-unsigned-aligned.apk apksigner.jar > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rafd-License-Issuer-1.0.0-offline-signing-input
+          path: issuer-signing-input/
           if-no-files-found: error
