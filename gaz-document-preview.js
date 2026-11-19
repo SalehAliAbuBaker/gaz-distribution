@@ -10,7 +10,7 @@ const totalOf=s=>s.rows.reduce((sum,r)=>sum+r.quantity,0);
 const metaRows=s=>[['رقم المستند',s.cycle.docNo,'تاريخ الدورة',s.cycle.date],['مسمى الدورة',s.cycle.title,'المسؤول / المورد',s.cycle.donor],['عدد الأسر',String(s.rows.length),'تاريخ الإصدار',s.issued]];
 const heads=['م','المستفيد','رابط الأسرة/رقم المنزل / المربع / المنطقة','الأفراد','الفئة','الكمية'];
 const fields=(r,i)=>[String(i+1),r.name,r.home,r.members,r.category,r.quantity?String(r.quantity):'—'];
-const filename=s=>('كشف_توزيع_الغاز_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
+const filename=s=>('رفد_كشف_توزيع_الغاز_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
 function definition(s){
  const cell=(v,extra={})=>({text:String(v??''),alignment:'right',...extra});
  const grid={hLineWidth:()=>.5,vLineWidth:()=>.5,hLineColor:()=> '#94a3b8',vLineColor:()=> '#94a3b8',paddingLeft:()=>4,paddingRight:()=>4,paddingTop:()=>4,paddingBottom:()=>4};
@@ -20,7 +20,7 @@ function definition(s){
  const body=[heads.slice().reverse().map(v=>cell(v,{bold:true,alignment:'center',fillColor:'#e2e8f0'})),...s.rows.map((r,i)=>fields(r,i).reverse().map((v,j)=>cell(v,{alignment:[0,2,5].includes(j)?'center':'right',bold:j===0})))];
  if(!s.rows.length)body.push([cell('لا توجد أسر مطابقة',{colSpan:6,alignment:'center'}),{},{},{},{},{}]);
  body.push([cell(totalOf(s),{bold:true,alignment:'center',fillColor:'#f1f5f9'}),cell('إجمالي الأسطوانات',{colSpan:5,bold:true,fillColor:'#f1f5f9'}),{},{},{},{}]);
- return {pageSize:'A4',pageOrientation:'portrait',pageMargins:[28,28,28,34],defaultStyle:{font:'Tajawal',fontSize:9,color:'#111827',alignment:'right',lineHeight:1.12},info:{title:titleOf(s),creator:'توزيع الغاز'},content:[
+ return {pageSize:'A4',pageOrientation:'portrait',pageMargins:[28,28,28,34],defaultStyle:{font:'Tajawal',fontSize:9,color:'#111827',alignment:'right',lineHeight:1.12},info:{title:titleOf(s),creator:'رفد'},content:[
  {text:'بسم الله الرحمن الرحيم',alignment:'center',bold:true,fontSize:12,margin:[0,0,0,3]},
  {text:s.area,alignment:'center',fontSize:10,color:'#475569'},
  {text:titleOf(s),bold:true,alignment:'center',fontSize:17,margin:[0,2,0,9]},

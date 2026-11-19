@@ -377,7 +377,7 @@ public final class MainActivity extends Activity {
     private void distributorReports(){
         try{JSONArray all=pairing.allocations();java.util.LinkedHashMap<String,int[]> sums=new java.util.LinkedHashMap<>();java.util.LinkedHashMap<String,String> labels=new java.util.LinkedHashMap<>();
             for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);String cycle=r.getString("cycle");labels.put(cycle,r.getString("cycleTitle")+" · "+r.optString("cycleDate"));int[] n=sums.get(cycle);if(n==null){n=new int[5];sums.put(cycle,n);}n[0]++;if(r.optBoolean("done")){n[1]++;n[2]+=r.optInt("q");if(!r.optBoolean("synced"))n[3]++;}else n[4]++;}
-            StringBuilder out=new StringBuilder("كشف توزيع الغاز — "+pairing.status().getString("area"));
+            StringBuilder out=new StringBuilder("رفد — كشف توزيع الغاز — "+pairing.status().getString("area"));
             for(String cycle:sums.keySet()){int[] n=sums.get(cycle);out.append("\n\n").append(labels.get(cycle)).append("\nالأسر المخصصة: ").append(n[0]).append(" | المستلمة: ").append(n[1]).append(" | المتبقية: ").append(n[4]).append("\nالأسطوانات المسلمة: ").append(n[2]).append(" | حركات بانتظار المزامنة: ").append(n[3]);}
             if(sums.isEmpty())out.append("\nلا توجد تخصيصات");final String text=out.toString();
             ScrollView sc=new ScrollView(this);LinearLayout p=pairLayout();pairText(p,text);sc.addView(p);
@@ -386,10 +386,10 @@ public final class MainActivity extends Activity {
         }catch(Exception e){msg("تعذر إعداد التقرير");}
     }
     private void contact(String type){
-        try{Intent i;switch(type){case "phone":i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:+967734915588"));break;case "whatsapp":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588"));break;case "feedback":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588").buildUpon().appendQueryParameter("text","السلام عليكم، لدي مقترح أو ملاحظة بشأن تطبيق توزيع الغاز:").build());break;case "email":i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saleh0129@gmail.com"));break;default:return;}startActivity(i);}catch(Exception e){msg("تعذر فتح تطبيق التواصل");}
+        try{Intent i;switch(type){case "phone":i=new Intent(Intent.ACTION_DIAL,Uri.parse("tel:+967734915588"));break;case "whatsapp":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588"));break;case "feedback":i=new Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/967734915588").buildUpon().appendQueryParameter("text","السلام عليكم، لدي مقترح أو ملاحظة بشأن تطبيق رفد:").build());break;case "email":i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:saleh0129@gmail.com"));break;default:return;}startActivity(i);}catch(Exception e){msg("تعذر فتح تطبيق التواصل");}
     }
     private void showContact(){
-        LinearLayout p=pairLayout();pairText(p,"توزيع الغاز\nتطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة للمطور.");
+        LinearLayout p=pairLayout();pairText(p,"رفد – لإدارة المساعدات وتوزيعها\nتطوير: صالح علي أبوبكر الخطيب\nجميع الحقوق محفوظة للمطور.");
         pairButton(p,"اتصال هاتفي: +967 734 915 588",()->contact("phone"));pairButton(p,"واتساب: +967 734 915 588",()->contact("whatsapp"));pairButton(p,"البريد: saleh0129@gmail.com",()->contact("email"));
         new AlertDialog.Builder(this).setTitle("حول التطبيق والدعم").setView(p).setPositiveButton("إغلاق",null).show();
     }
@@ -546,7 +546,7 @@ public final class MainActivity extends Activity {
         try{String r=store.role();if(("mother".equals(r)||"independent".equals(r))&&store.admin(admin))return true;}catch(Exception ignored){}
         msg("هذه الصلاحية لمدير الجوال الأم");return false;
     }
-    private void exportExcelTemplate(String admin){if(!excelAllowed(admin))return;workers.execute(()->{try{File f=tempFile("Gaz_Beneficiaries_100",".xlsx",BeneficiaryExcel.template());runOnUiThread(()->{if(excelAllowed(admin))savePicker(f,BeneficiaryExcel.MIME);});}catch(Exception e){msg("تعذر إنشاء نموذج Excel");}});}
+    private void exportExcelTemplate(String admin){if(!excelAllowed(admin))return;workers.execute(()->{try{File f=tempFile("Rafd_Beneficiaries_100",".xlsx",BeneficiaryExcel.template());runOnUiThread(()->{if(excelAllowed(admin))savePicker(f,BeneficiaryExcel.MIME);});}catch(Exception e){msg("تعذر إنشاء نموذج Excel");}});}
     private void chooseExcel(String admin){
         if(!excelAllowed(admin))return;excelAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);
         try{startActivityForResult(i,IMPORT_EXCEL);}catch(Exception e){excelAdmin=null;msg("تعذر فتح الملفات");}
@@ -602,7 +602,7 @@ public final class MainActivity extends Activity {
         pairButton(p,"مشاركة مع خدمة أخرى",()->{d.dismiss();askPass(true,null,true,admin,"share","");});d.show();
     }
     private void emailBackup(File f,String email){
-        try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",f);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/gzip");i.putExtra(Intent.EXTRA_EMAIL,new String[]{email});i.putExtra(Intent.EXTRA_SUBJECT,"نسخة احتياطية مشفرة – توزيع الغاز");i.putExtra(Intent.EXTRA_TEXT,"نسخة احتياطية مشفرة من تطبيق توزيع الغاز. لا ترسل كلمة مرور فك التشفير مع الملف.");i.putExtra(Intent.EXTRA_STREAM,uri);i.setClipData(ClipData.newRawUri("نسخة احتياطية مشفرة",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try{Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",f);Intent i=new Intent(Intent.ACTION_SEND);i.setType("application/gzip");i.putExtra(Intent.EXTRA_EMAIL,new String[]{email});i.putExtra(Intent.EXTRA_SUBJECT,"نسخة احتياطية مشفرة – رفد");i.putExtra(Intent.EXTRA_TEXT,"نسخة احتياطية مشفرة من تطبيق رفد. لا ترسل كلمة مرور فك التشفير مع الملف.");i.putExtra(Intent.EXTRA_STREAM,uri);i.setClipData(ClipData.newRawUri("نسخة احتياطية مشفرة",uri));i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(Intent.createChooser(i,"اختر Gmail أو تطبيق البريد، ثم تحقق من المستلم وأرسل"));}catch(Exception e){msg("تعذر فتح مشاركة البريد؛ احفظ النسخة محليًا أولًا");}
     }
     private void cloudShare(File f){
@@ -614,7 +614,7 @@ public final class MainActivity extends Activity {
         EditText password=new EditText(this);password.setSingleLine(true);password.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);password.setHint("كلمة مرور النسخة (8 أحرف فأكثر)");
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(backup?"تشفير النسخة الاحتياطية":"فك تشفير النسخة الاحتياطية").setMessage(backup?"احتفظ بكلمة المرور خارج هذا الجوال. لا يمكن استردادها.":"لن تتغير البيانات قبل التحقق والتأكيد.").setView(password).setNegativeButton("إلغاء",null).setPositiveButton("متابعة",null).create();
         dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{char[] pass=password.getText().toString().toCharArray();if(pass.length<8){Arrays.fill(pass,'\0');password.setError("8 أحرف على الأقل");return;}password.setText("");dialog.dismiss();
-            workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("gaz_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->{if(!backupAllowed(admin))return;if(cloud&&"email".equals(destination))emailBackup(f,email);else if(cloud&&"drive".equals(destination)){msg(email.isEmpty()?"اختر Drive في منتقي الملفات":"اختر Drive والحساب "+email+" في منتقي الملفات");savePicker(f,"application/gzip");}else if(cloud)cloudShare(f);else savePicker(f,"application/gzip");});}else{
+            workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("rafd_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->{if(!backupAllowed(admin))return;if(cloud&&"email".equals(destination))emailBackup(f,email);else if(cloud&&"drive".equals(destination)){msg(email.isEmpty()?"اختر Drive في منتقي الملفات":"اختر Drive والحساب "+email+" في منتقي الملفات");savePicker(f,"application/gzip");}else if(cloud)cloudShare(f);else savePicker(f,"application/gzip");});}else{
                 byte[] bytes;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();bytes=readLimited(in);}
                 String json=GazStore.decodeBackup(bytes,pass);JSONObject checked=store.previewRestore(json);boolean mother="mother".equals(store.role());
                 String summary="الأسر: "+checked.getJSONArray("families").length()+" | الدورات: "+checked.getJSONArray("cycles").length()+" | حركات التسليم: "+checked.getJSONArray("deliveries").length();
