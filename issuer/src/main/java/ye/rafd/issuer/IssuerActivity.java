@@ -30,7 +30,9 @@ public final class IssuerActivity extends Activity {
     private EditText password,device,entity,holder,code;
     private TextView state,fileStatus,date;
     private Spinner role,duration;
-    private Button issue,copy,share,lock,unlock;
+    private Button issue,copy,share,lock,unlock,changePassword;
+    private boolean bootstrapPending;
+    private int authGeneration;
     private final Calendar custom=Calendar.getInstance();
     private boolean customSet;
     private File keyFile(){return new File(getFilesDir(),"issuer-key.json");}
@@ -40,12 +42,13 @@ public final class IssuerActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);root.setPadding(dp(16),dp(18),dp(16),dp(20));root.setBackgroundColor(0xfff5f8f7);scroll.addView(root);setContentView(scroll);
         TextView title=text("تصاريح رفد",27,GREEN);title.setTypeface(null,Typeface.BOLD);title.setGravity(Gravity.CENTER);root.addView(title);
-        TextView sub=text("لوحة المطور • إصدار 1.0.0",14,INK);sub.setGravity(Gravity.CENTER);root.addView(sub);
+        TextView sub=text("لوحة المطور • إصدار 1.0.1",14,INK);sub.setGravity(Gravity.CENTER);root.addView(sub);
         LinearLayout security=card(root);heading(security,"مفتاح الاستصدار");
-        fileStatus=text("استورد ملف المفتاح المشفر مرة واحدة.",14,INK);security.addView(fileStatus);
-        button(security,"استيراد ملف المفتاح",false,()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK);});
+        fileStatus=text("جارٍ التحقق من المفتاح المشفر",14,INK);security.addView(fileStatus);
+        Button importKey=button(security,"استيراد مفتاح احتياطي",false,()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK);});
         password=field(security,"كلمة مرور المفتاح",InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         unlock=button(security,"فتح المفتاح",true,()->unlockKey());
+        changePassword=button(security,"تغيير كلمة المرور",false,()->changePasswordDialog());changePassword.setEnabled(false);
         lock=button(security,"قفل المفتاح",false,()->lockKey());lock.setEnabled(false);
         state=text("المفتاح مقفل",13,INK);security.addView(state);
         LinearLayout form=card(root);heading(form,"استصدار تصريح تشغيل");
@@ -64,7 +67,7 @@ public final class IssuerActivity extends Activity {
         copy=button(output,"نسخ الكود",true,()->{String c=code.getText().toString();if(c.isEmpty())return;ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("تصريح رفد",c));toast("تم نسخ الكود");});copy.setEnabled(false);
         share=button(output,"مشاركة الكود",false,()->{String c=code.getText().toString();if(c.isEmpty())return;Intent i=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,c);startActivity(Intent.createChooser(i,"مشاركة تصريح رفد"));});share.setEnabled(false);
         TextView help=text("لا ترسل ملف المفتاح أو كلمة مروره للمستخدمين. أرسل كود التصريح فقط.",12,INK);root.addView(help);
-        try{if(keyFile().isFile()){bundle=readLimited(new FileInputStream(keyFile()));fileStatus.setText("ملف المفتاح المشفر محفوظ على الجهاز.");}}catch(Exception e){bundle=null;}
+        try{if(keyFile().isFile()){bundle=readLimited(new FileInputStream(keyFile()));validateBundle(bundle);fileStatus.setText("المفتاح المشفر محفوظ على الجهاز.");}else{bundle=readLimited(getAssets().open("owner/permit-key.json"));validateBundle(bundle);bootstrapPending=true;fileStatus.setText("المفتاح مضمّن وجاهز. افتحه بكلمة المرور السابقة، ثم اختر كلمة مرور جديدة.");}importKey.setVisibility(View.GONE);}catch(Exception e){bundle=null;fileStatus.setText("تعذر تحميل المفتاح. اختر ملف المفتاح الاحتياطي.");}
     }
     private TextView text(String t,int size,int color){TextView v=new TextView(this);v.setText(t);v.setTextSize(size);v.setTextColor(color);v.setPadding(0,dp(5),0,dp(5));return v;}
     private LinearLayout card(LinearLayout parent){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(dp(12),dp(9),dp(12),dp(10));GradientDrawable bg=new GradientDrawable();bg.setColor(Color.WHITE);bg.setCornerRadius(dp(12));bg.setStroke(dp(1),0xffdce7e3);p.setBackground(bg);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(12);parent.addView(p,lp);return p;}
@@ -74,13 +77,54 @@ public final class IssuerActivity extends Activity {
     private Spinner spinner(LinearLayout p,String label,String[] choices){p.addView(text(label,12,INK));Spinner s=new Spinner(this);ArrayAdapter<String> a=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,choices);a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);s.setAdapter(a);s.setMinimumHeight(dp(42));p.addView(s,new LinearLayout.LayoutParams(-1,-2));return s;}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
     private static byte[] readLimited(InputStream in)throws Exception{try(InputStream i=in;ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=i.read(b))!=-1){if(out.size()+n>65536)throw new IOException("Too large");out.write(b,0,n);}return out.toByteArray();}}
-    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request!=PICK||result!=RESULT_OK||data==null||data.getData()==null)return;try{byte[] candidate=readLimited(getContentResolver().openInputStream(data.getData()));validateBundle(candidate);lockKey();bundle=candidate;fileStatus.setText("تم اختيار المفتاح. أدخل كلمة المرور لفتحه وحفظه مشفرًا.");}catch(Exception e){toast("ملف المفتاح غير صالح لرفد");}}
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request!=PICK||result!=RESULT_OK||data==null||data.getData()==null)return;try{byte[] candidate=readLimited(getContentResolver().openInputStream(data.getData()));validateBundle(candidate);lockKey();bundle=candidate;bootstrapPending=true;fileStatus.setText("تم اختيار المفتاح. افتحه ثم اختر كلمة مرور خاصة بك.");}catch(Exception e){toast("ملف المفتاح غير صالح لرفد");}}
     private static String hex(byte[] b){StringBuilder s=new StringBuilder();for(byte v:b)s.append(String.format(Locale.ROOT,"%02x",v&255));return s.toString();}
     private static JSONObject validateBundle(byte[] raw)throws Exception{JSONObject j=new JSONObject(new String(raw,StandardCharsets.UTF_8));if(!FORMAT.equals(j.getString("format"))||j.getInt("iterations")!=310000||!EXPECTED.equals(hex(MessageDigest.getInstance("SHA-256").digest(Base64.getDecoder().decode(j.getString("publicKey"))))))throw new SecurityException("Wrong key");return j;}
     private static PrivateKey decrypt(byte[] raw,char[] pass)throws Exception{JSONObject j=validateBundle(raw);Base64.Decoder b=Base64.getDecoder();PBEKeySpec spec=new PBEKeySpec(pass,b.decode(j.getString("salt")),310000,256);byte[] derived=SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();spec.clearPassword();byte[] pk=null;try{Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,new SecretKeySpec(derived,"AES"),new GCMParameterSpec(128,b.decode(j.getString("iv"))));c.updateAAD(FORMAT.getBytes(StandardCharsets.UTF_8));pk=c.doFinal(b.decode(j.getString("encrypted")));KeyFactory f=KeyFactory.getInstance("RSA");PrivateKey k=f.generatePrivate(new PKCS8EncodedKeySpec(pk));PublicKey pub=f.generatePublic(new X509EncodedKeySpec(b.decode(j.getString("publicKey"))));byte[] probe="rafd-check".getBytes(StandardCharsets.UTF_8);Signature sig=Signature.getInstance("SHA256withRSA");sig.initSign(k);sig.update(probe);byte[] signature=sig.sign();sig.initVerify(pub);sig.update(probe);if(!sig.verify(signature))throw new SecurityException("Mismatch");return k;}finally{Arrays.fill(derived,(byte)0);if(pk!=null)Arrays.fill(pk,(byte)0);}}
-    private void unlockKey(){if(bundle==null){toast("استورد ملف المفتاح أولًا");return;}char[] pass=password.getText().toString().trim().toCharArray();password.setText("");if(pass.length==0){toast("أدخل كلمة المرور");return;}byte[] selected=bundle.clone();unlock.setEnabled(false);state.setText("جارٍ التحقق من المفتاح");worker.execute(()->{try{PrivateKey k=decrypt(selected,pass);try(FileOutputStream out=openFileOutput("issuer-key.json",MODE_PRIVATE)){out.write(selected);}runOnUiThread(()->{if(isFinishing()||isDestroyed())return;key=k;issue.setEnabled(true);lock.setEnabled(true);unlock.setEnabled(true);state.setText("المفتاح مفتوح ومطابق");fileStatus.setText("ملف المفتاح المشفر محفوظ على الجهاز.");});}catch(Exception e){runOnUiThread(()->{if(isFinishing()||isDestroyed())return;unlock.setEnabled(true);state.setText("تعذر فتح المفتاح؛ تحقق من كلمة المرور");});}finally{Arrays.fill(pass,'\0');}});}
-    private void lockKey(){key=null;password.setText("");issue.setEnabled(false);lock.setEnabled(false);state.setText("المفتاح مقفل");}
+    private void saveBundle(byte[] data)throws Exception{
+        android.util.AtomicFile atomic=new android.util.AtomicFile(keyFile());FileOutputStream out=null;
+        try{out=atomic.startWrite();out.write(data);atomic.finishWrite(out);}catch(Exception e){if(out!=null)atomic.failWrite(out);throw e;}
+    }
+    private static byte[] reencrypt(byte[] old,PrivateKey key,char[] pass)throws Exception{
+        JSONObject prior=validateBundle(old);SecureRandom random=new SecureRandom();byte[] salt=new byte[16],iv=new byte[12];random.nextBytes(salt);random.nextBytes(iv);
+        PBEKeySpec spec=new PBEKeySpec(pass,salt,310000,256);byte[] derived=null,plain=null;
+        try{derived=SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();plain=key.getEncoded();
+            Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,new SecretKeySpec(derived,"AES"),new GCMParameterSpec(128,iv));c.updateAAD(FORMAT.getBytes(StandardCharsets.UTF_8));
+            Base64.Encoder b=Base64.getEncoder();byte[] encrypted=c.doFinal(plain);
+            JSONObject j=new JSONObject().put("format",FORMAT).put("iterations",310000).put("salt",b.encodeToString(salt)).put("iv",b.encodeToString(iv)).put("encrypted",b.encodeToString(encrypted)).put("publicKey",prior.getString("publicKey"));
+            byte[] result=j.toString().getBytes(StandardCharsets.UTF_8);decrypt(result,pass);return result;
+        }finally{spec.clearPassword();if(derived!=null)Arrays.fill(derived,(byte)0);if(plain!=null)Arrays.fill(plain,(byte)0);}
+    }
+    private void unlockKey(){
+        if(bundle==null){toast("لا يوجد مفتاح صالح");return;}
+        char[] pass=password.getText().toString().trim().toCharArray();password.setText("");
+        if(pass.length==0){toast("أدخل كلمة المرور");return;}
+        byte[] selected=bundle.clone();int generation=++authGeneration;unlock.setEnabled(false);state.setText("جارٍ التحقق من المفتاح");
+        worker.execute(()->{try{PrivateKey k=decrypt(selected,pass);runOnUiThread(()->{
+            if(isFinishing()||isDestroyed()||generation!=authGeneration)return;key=k;issue.setEnabled(!bootstrapPending);lock.setEnabled(true);unlock.setEnabled(true);changePassword.setEnabled(true);
+            state.setText(bootstrapPending?"اختر كلمة مرور جديدة لاستكمال التهيئة":"المفتاح مفتوح ومطابق");
+            if(bootstrapPending)changePasswordDialog();
+        });}catch(Exception e){runOnUiThread(()->{if(isFinishing()||isDestroyed()||generation!=authGeneration)return;unlock.setEnabled(true);state.setText("تعذر فتح المفتاح؛ تحقق من كلمة المرور");});}finally{Arrays.fill(pass,'\0');}});
+    }
+    private void changePasswordDialog(){
+        PrivateKey k=key;if(k==null||bundle==null){toast("افتح المفتاح أولًا");return;}
+        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);layout.setPadding(dp(16),dp(8),dp(16),dp(8));
+        EditText next=field(layout,"كلمة المرور الجديدة (8 أحرف فأكثر)",InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        EditText again=field(layout,"تأكيد كلمة المرور الجديدة",InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("تعيين كلمة المرور").setMessage("احتفظ بكلمة المرور في مكان آمن. لن تتغير أكواد التصاريح السابقة.").setView(layout).setNegativeButton("إلغاء",null).setPositiveButton("حفظ",null).create();
+        d.setOnShowListener(x->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String a=next.getText().toString().trim(),b=again.getText().toString().trim();
+            if(a.length()<8){next.setError("ثمانية أحرف على الأقل");return;}if(!a.equals(b)){again.setError("كلمتا المرور غير متطابقتين");return;}
+            if(key!=k){d.dismiss();toast("افتح المفتاح مجددًا");return;}
+            char[] pass=a.toCharArray();next.setText("");again.setText("");byte[] selected=bundle.clone();int generation=++authGeneration;d.dismiss();issue.setEnabled(false);unlock.setEnabled(false);lock.setEnabled(false);changePassword.setEnabled(false);state.setText("جارٍ تشفير المفتاح بكلمة المرور الجديدة");
+            worker.execute(()->{try{byte[] updated=reencrypt(selected,k,pass);saveBundle(updated);runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;bundle=updated;bootstrapPending=false;lockKey();fileStatus.setText("المفتاح محفوظ بكلمة مرورك الجديدة.");state.setText("تم تغيير كلمة المرور. افتح المفتاح بكلمة المرور الجديدة.");toast("تم حفظ كلمة المرور الجديدة");
+            });}catch(Exception e){runOnUiThread(()->{if(isFinishing()||isDestroyed()||generation!=authGeneration)return;lockKey();state.setText("تعذر حفظ كلمة المرور؛ لم يتغير المفتاح السابق");});}finally{Arrays.fill(pass,'\0');}});
+        }));d.show();
+    }
+    private void lockKey(){authGeneration++;key=null;password.setText("");issue.setEnabled(false);lock.setEnabled(false);changePassword.setEnabled(false);unlock.setEnabled(true);state.setText("المفتاح مقفل");}
     private static String b64(byte[] b){return Base64.getUrlEncoder().withoutPadding().encodeToString(b);}
-    private void issueCode(){try{PrivateKey k=key;if(k==null)throw new IllegalStateException("المفتاح مقفل");String id=device.getText().toString().trim().toUpperCase(Locale.ROOT).replaceFirst("^RFD[-\\s]*","").replaceAll("[\\s-]","");if(!id.matches("[0-9A-F]{32}"))throw new IllegalArgumentException("معرّف الجهاز غير صحيح");long now=System.currentTimeMillis()/1000L,exp=0;int d=duration.getSelectedItemPosition();if(d<3)exp=now+new long[]{30,180,365}[d]*86400L;else if(d==4){if(!customSet)throw new IllegalArgumentException("حدد تاريخ الانتهاء");exp=custom.getTimeInMillis()/1000L;if(exp<=now)throw new IllegalArgumentException("تاريخ الانتهاء غير صالح");}String e=entity.getText().toString().trim(),h=holder.getText().toString().trim();if(e.length()>120||h.length()>120)throw new IllegalArgumentException("الاسم طويل جدًا");JSONObject p=new JSONObject().put("v",1).put("app","rafd").put("device",id).put("role",role.getSelectedItemPosition()==0?"mother":"distributor").put("iat",now).put("exp",exp).put("id",UUID.randomUUID().toString()).put("entity",e).put("holder",h);String prefix="RFD1."+b64(p.toString().getBytes(StandardCharsets.UTF_8));Signature sig=Signature.getInstance("SHA256withRSA");sig.initSign(k);sig.update(prefix.getBytes(StandardCharsets.US_ASCII));code.setText(prefix+"."+b64(sig.sign()));copy.setEnabled(true);share.setEnabled(true);toast("تم استصدار التصريح");}catch(Exception e){toast(e instanceof IllegalArgumentException?e.getMessage():"تعذر استصدار التصريح");}}
-    @Override protected void onDestroy(){key=null;worker.shutdownNow();super.onDestroy();}
+    private void issueCode(){try{PrivateKey k=key;if(k==null||bootstrapPending)throw new IllegalStateException("المفتاح مقفل");String id=device.getText().toString().trim().toUpperCase(Locale.ROOT).replaceFirst("^RFD[-\\s]*","").replaceAll("[\\s-]","");if(!id.matches("[0-9A-F]{32}"))throw new IllegalArgumentException("معرّف الجهاز غير صحيح");long now=System.currentTimeMillis()/1000L,exp=0;int d=duration.getSelectedItemPosition();if(d<3)exp=now+new long[]{30,180,365}[d]*86400L;else if(d==4){if(!customSet)throw new IllegalArgumentException("حدد تاريخ الانتهاء");exp=custom.getTimeInMillis()/1000L;if(exp<=now)throw new IllegalArgumentException("تاريخ الانتهاء غير صالح");}String e=entity.getText().toString().trim(),h=holder.getText().toString().trim();if(e.length()>120||h.length()>120)throw new IllegalArgumentException("الاسم طويل جدًا");JSONObject p=new JSONObject().put("v",1).put("app","rafd").put("device",id).put("role",role.getSelectedItemPosition()==0?"mother":"distributor").put("iat",now).put("exp",exp).put("id",UUID.randomUUID().toString()).put("entity",e).put("holder",h);String prefix="RFD1."+b64(p.toString().getBytes(StandardCharsets.UTF_8));Signature sig=Signature.getInstance("SHA256withRSA");sig.initSign(k);sig.update(prefix.getBytes(StandardCharsets.US_ASCII));code.setText(prefix+"."+b64(sig.sign()));copy.setEnabled(true);share.setEnabled(true);toast("تم استصدار التصريح");}catch(Exception e){toast(e instanceof IllegalArgumentException?e.getMessage():"تعذر استصدار التصريح");}}
+    @Override protected void onStop(){if(key!=null&&unlock.isEnabled())lockKey();super.onStop();}
+    @Override protected void onDestroy(){authGeneration++;key=null;worker.shutdownNow();super.onDestroy();}
 }
