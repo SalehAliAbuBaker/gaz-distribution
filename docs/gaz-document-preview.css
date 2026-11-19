@@ -42,3 +42,14 @@ body.gaz-preview-open{overflow:hidden}
 #gazPreviewExtras{position:absolute;inset-inline-end:8px;bottom:100%;background:#fff;padding:6px;border:1px solid var(--rafd-border,#c8dad5);z-index:2;border-radius:9px}
 #gazPreviewExtras[hidden]{display:none!important}
 #gazPreviewPaper{--rafd-size:1}
+
+@media screen{
+#gazPreview .gaz-preview-head{padding:8px 10px;gap:6px}
+#gazPreview .gaz-preview-head h2{min-width:0;font-size:calc(15px * var(--rafd-size,1));line-height:1.3;overflow-wrap:anywhere}
+#gazPreview button{min-height:38px;white-space:normal;line-height:1.3}
+#gazPreview .gaz-preview-toolbar{gap:6px;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+#gazPreview .gaz-preview-toolbar>button{min-height:42px;padding:6px 4px;font-size:calc(12px * var(--rafd-size,1))}
+#gazPreviewExtras{max-height:55vh;overflow:auto}
+#gazPreview .gaz-zoom{padding:4px;gap:5px}
+#gazPreviewStatus{padding:4px 6px}
+}

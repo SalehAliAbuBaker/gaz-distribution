@@ -122,9 +122,9 @@ public final class MainActivity extends Activity {
         msg("يلزم حساب مدير الجهاز");return false;
     }
     private void notifyPairChange(){if(web!=null)web.evaluateJavascript("window.location.reload()",null);}
-    private LinearLayout pairLayout(){LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);int d=(int)(18*getResources().getDisplayMetrics().density);v.setPadding(d,d,d,d);return v;}
-    private void pairText(LinearLayout p,String text){TextView t=new TextView(this);t.setText(text);t.setTextSize(15);t.setPadding(0,8,0,12);p.addView(t);}
-    private void pairButton(LinearLayout p,String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);p.addView(b);b.setOnClickListener(v->action.run());}
+    private LinearLayout pairLayout(){LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);int d=(int)(14*getResources().getDisplayMetrics().density);v.setPadding(d,d,d,d);return v;}
+    private void pairText(LinearLayout p,String text){TextView t=new TextView(this);t.setText(text);t.setTextSize(14);float d=getResources().getDisplayMetrics().density;t.setPadding(0,(int)(4*d),0,(int)(8*d));p.addView(t);}
+    private void pairButton(LinearLayout p,String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setMinHeight((int)(44*getResources().getDisplayMetrics().density));p.addView(b,new LinearLayout.LayoutParams(-1,-2));b.setOnClickListener(v->action.run());}
     private void manageDevicesScreen(String admin){
         if(!adminAllowed(admin))return;
         try{
