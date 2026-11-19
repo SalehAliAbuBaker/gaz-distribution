@@ -434,7 +434,7 @@ public final class MainActivity extends Activity {
     private void distributorScreen(String admin){pagedDistributorRows(false,true,admin);}
     private void recordDelivery(String admin,JSONObject row){
         if(!distributorAllowed("deliver"))return;
-        EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setText(""+row.optInt("maxQty"));
+        EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setHint("عدد العطايا");qty.setText(""+row.optInt("maxQty"));
         new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" عطية. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-search-refresh'))",null);distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
     }
     private void chooseLan(String admin){
@@ -463,7 +463,7 @@ public final class MainActivity extends Activity {
     private void closeLan(){GazLan s=lan;lan=null;if(s!=null)s.close();}
     private void connectLan(String admin){
         if(!syncAllowed(admin))return;
-        EditText ip=new EditText(this);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_TEXT);ip.setHint("192.168.x.x");
+        EditText ip=new EditText(this);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_TEXT);ip.setHint("عنوان IP (192.168.x.x)");
         new AlertDialog.Builder(this).setTitle("المزامنة مع الجوال الأم").setMessage("أدخل عنوان Wi-Fi المعروض على شاشة مزامنة الأم.").setView(ip).setNegativeButton("إلغاء",null).setPositiveButton("مزامنة",(d,w)->{
             syncAddress(admin,ip.getText().toString().trim());
         }).show();
