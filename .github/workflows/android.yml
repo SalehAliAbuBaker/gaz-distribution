@@ -89,6 +89,6 @@ jobs:
           (cd issuer-signing-input && sha256sum rafd-issuer-unsigned-aligned.apk apksigner.jar > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
-          name: Rafd-License-Issuer-1.0.1-offline-signing-input
+          name: Rafd-License-Issuer-1.0.2-offline-signing-input
           path: issuer-signing-input/
           if-no-files-found: error
