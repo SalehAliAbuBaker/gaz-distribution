@@ -33,7 +33,15 @@ function engine(){if(window.pdfMake?.createPdf)return Promise.resolve(window.pdf
 function b64(bytes){let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(binary)}
 function loadFonts(){if(!fontsPromise)fontsPromise=Promise.all(['tajawal_regular.ttf','tajawal_bold.ttf'].map(async f=>{let r=await fetch('./'+f,{cache:'force-cache'});if(!r.ok)throw Error('تعذر تحميل خط تجوّل');let b=new Uint8Array(await r.arrayBuffer());if(b.length<10000||b[0]!==0||b[1]!==1)throw Error('خط PDF غير صالح');return [f,b64(b)]})).then(Object.fromEntries).catch(e=>{fontsPromise=null;throw e});return fontsPromise}
 async function makePDF(s){let [pdf,vfs]=await Promise.all([engine(),loadFonts()]);pdf.vfs={...(pdf.vfs||{}),...vfs};pdf.fonts={...(pdf.fonts||{}),Tajawal:{normal:'tajawal_regular.ttf',bold:'tajawal_bold.ttf',italics:'tajawal_regular.ttf',bolditalics:'tajawal_bold.ttf'}};let blob=await new Promise((resolve,reject)=>{try{pdf.createPdf(definition(s)).getBlob(b=>b?.size>100?resolve(b):reject(Error('تعذر إنشاء PDF')))}catch(e){reject(e)}});if((await blob.slice(0,5).text())!=='%PDF-')throw Error('الملف الناتج ليس PDF صالحًا');return new File([blob],filename(s),{type:'application/pdf'})}
-window.GazDocumentPdf={capture,definition,makePDF,filename};
+async function createCustomFile(doc,name){
+ let [pdf,vfs]=await Promise.all([engine(),loadFonts()]);
+ pdf.vfs={...(pdf.vfs||{}),...vfs};
+ pdf.fonts={...(pdf.fonts||{}),Tajawal:{normal:'tajawal_regular.ttf',bold:'tajawal_bold.ttf',italics:'tajawal_regular.ttf',bolditalics:'tajawal_bold.ttf'}};
+ let blob=await new Promise((resolve,reject)=>{try{pdf.createPdf(doc).getBlob(b=>b?.size>100?resolve(b):reject(Error('تعذر إنشاء PDF')))}catch(e){reject(e)}});
+ if((await blob.slice(0,5).text())!=='%PDF-')throw Error('ملف PDF غير صالح');
+ return new File([blob],name,{type:'application/pdf'});
+}
+window.GazDocumentPdf={capture,definition,makePDF,filename,createCustomFile};
 const host=document.createElement('div');host.id='gazPreview';host.hidden=true;host.setAttribute('role','dialog');host.setAttribute('aria-modal','true');host.setAttribute('aria-labelledby','gazPreviewTitle');
 host.innerHTML='<div class="gaz-preview-head"><h2 id="gazPreviewTitle">معاينة الكشف</h2><button id="gazPreviewClose" class="muted" type="button">إغلاق ×</button></div><div class="gaz-preview-toolbar"><button id="gazPreviewPrint" type="button">طباعة</button><button id="gazPreviewShare" type="button" disabled>مشاركة</button><button id="gazPreviewMore" type="button" aria-expanded="false" aria-controls="gazPreviewExtras">المزيد</button><div id="gazPreviewExtras" hidden><button id="gazPreviewExport" type="button" disabled>تصدير PDF</button></div></div><div class="gaz-zoom"><button id="gazZoomMinus" type="button" aria-label="تصغير">−</button><output id="gazZoomValue">100%</output><button id="gazZoomPlus" type="button" aria-label="تكبير">+</button><button id="gazZoomFit" type="button">ملاءمة الشاشة</button></div><div id="gazPreviewStatus" role="status"></div><div id="gazPreviewViewport" tabindex="0"><div id="gazPreviewExtent"><article id="gazPreviewPaper"></article></div></div>';
 document.body.append(host);
