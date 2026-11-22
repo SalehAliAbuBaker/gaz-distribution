@@ -141,9 +141,10 @@ final class GazStore extends SQLiteOpenHelper {
             for(int i=0;i<list.length();i++){
                 JSONObject x=list.getJSONObject(i);String rid;
                 if(kind.equals("deliveries")){
-                    String c=id(x,"c"),f=id(x,"f");if(!cycles.contains(c)||!family.contains(f)||x.getLong("q")<=0)throw new JSONException("Invalid delivery");rid=c+"/"+f;
+                    String c=id(x,"c"),f=id(x,"f");if(!cycles.contains(c)||!family.contains(f)||x.getLong("q")<=0)throw new JSONException("Invalid delivery");RafdMoney.checkDelivery(x);rid=c+"/"+f;
                 }else{
                     rid=id(x,"id");
+                    if(kind.equals("cycles"))RafdMoney.checkCycle(x);
                     if(kind.equals("families")){
                         if(x.has("square")&&(!(x.get("square") instanceof String)||x.getString("square").length()>80))throw new JSONException("Invalid square");
                         if(!family.add(rid)||x.getLong("no")<1||x.getLong("no")>state.getLong("n")||!numbers.add(""+x.getLong("no"))||x.getInt("members")<1||x.getString("name").trim().isEmpty()||!(x.opt("house") instanceof String)||x.getString("house").length()>200)throw new JSONException("Invalid beneficiary");

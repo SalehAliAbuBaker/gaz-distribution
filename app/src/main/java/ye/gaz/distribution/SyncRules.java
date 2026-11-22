@@ -27,6 +27,7 @@ final class SyncRules {
         require(c!=null&&f!=null&&!c.optBoolean("closed")&&delivery(local,cycle,family)==null,"Unavailable family/cycle");
         String k=key(cycle,family);JSONObject grants=map(state,"grants");require(!grants.has(k),"Already allocated");require(grants.length()<20000,"Test grant limit");
         JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(AidQuota.forFamily(c,f)))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
+        RafdMoney.checkCycle(c);if(!RafdMoney.kind(c).equals("none")&&RafdMoney.unit(c)>0){p.put("valueKind",RafdMoney.kind(c)).put("currency",RafdMoney.currency(c)).put("unitMinor",RafdMoney.unit(c));}
         String packet=SyncWire.sign(p,secret);grants.put(k,packet);return packet;
     }
     static JSONObject grantPayload(JSONObject s,String packet,String device)throws Exception{
@@ -59,6 +60,7 @@ final class SyncRules {
         JSONObject c=find(local.getJSONArray("cycles"),cycle);require(c!=null&&!c.optBoolean("closed")&&find(local.getJSONArray("families"),family)!=null&&delivery(local,cycle,family)==null,"Local record conflict");
         JSONObject movement=new JSONObject().put("c",cycle).put("f",family).put("q",q).put("at",p.getString("at")).put("by",user.getString("name")).put("syncReceipt",p.getString("id")).put("syncDevice",device);
         if(p.has("operator")||p.has("operatorId")){String operator=p.getString("operator"),operatorId=p.getString("operatorId");PairPackets.uuid(operatorId);require(!operator.trim().isEmpty()&&operator.length()<=120,"Invalid operator");movement.put("syncOperator",operator).put("syncOperatorId",operatorId).put("by",user.getString("name")+" / "+operator);}
+        RafdMoney.attach(movement,g,q);
         local.getJSONArray("deliveries").put(movement);
         receipts.put(k,packet);
     }
@@ -97,6 +99,7 @@ final class SyncRules {
             JSONObject fb=find(old.getJSONArray("families"),f),fa=find(next.getJSONArray("families"),f);
             require(before!=null&&after!=null&&fb!=null&&fa!=null,"Allocated cycle/family cannot be removed");
             for(String field:new String[]{"title","date","quota"})require(String.valueOf(before.get(field)).equals(String.valueOf(after.get(field))),"Allocated cycle cannot be changed");
+            for(String field:new String[]{"valueKind","currency","unitMinor"})require(String.valueOf(before.opt(field)).equals(String.valueOf(after.opt(field))),"Allocated bag value cannot be changed");
             for(String field:new String[]{"aidTwoAbove","aidThreeAbove"})require(AidQuota.threshold(before,field)==AidQuota.threshold(after,field),"Allocated cycle aid rules cannot be changed");
             for(String field:new String[]{"name","no"})require(String.valueOf(fb.get(field)).equals(String.valueOf(fa.get(field))),"Allocated family cannot be changed");
             require(!after.optBoolean("closed")||MotherDelivery.resolved(s,k),"Outstanding allocation");

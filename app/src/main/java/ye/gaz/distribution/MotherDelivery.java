@@ -32,6 +32,8 @@ final class MotherDelivery {
                 SyncRules.require("edit".equals(op)?old!=null:old==null,"Invalid delivery state");SyncRules.quantity(quantity);
                 next=old==null?new JSONObject().put("c",cycle).put("f",family).put("at",Instant.now().toString()).put("by",actor):SyncRules.copy(old);
                 next.put("q",quantity).put("updatedAt",Instant.now().toString()).put("updatedBy",actor).put("motherCorrected",true);
+                next.remove("valueKind");next.remove("currency");next.remove("unitMinor");next.remove("amountMinor");
+                RafdMoney.attach(next,c,quantity);
             }else throw new IllegalArgumentException("Unknown action");
             JSONArray rows=local.getJSONArray("deliveries");
             for(int i=rows.length()-1;i>=0;i--){JSONObject r=rows.getJSONObject(i);if(cycle.equals(r.getString("c"))&&family.equals(r.getString("f")))rows.remove(i);}
@@ -57,7 +59,7 @@ final class MotherDelivery {
             JSONObject old=SyncRules.delivery(local,cycle,family);SyncRules.require("delete".equals(op)?old!=null:old==null,"Delivery changed");
             if(grants.has(k)){change(s,local,k,op,e.getValue(),actor,reason);continue;}
             if("delete".equals(op)){for(int i=rows.length()-1;i>=0;i--){JSONObject row=rows.getJSONObject(i);if(cycle.equals(row.getString("c"))&&family.equals(row.getString("f")))rows.remove(i);}audit(s,k,actor,reason,op,old,null);}
-            else{JSONObject row=new JSONObject().put("c",cycle).put("f",family).put("q",e.getValue()).put("by",actor).put("at",Instant.now().toString()).put("motherCorrected",true);rows.put(row);audit(s,k,actor,reason,op,null,row);}
+            else{JSONObject row=new JSONObject().put("c",cycle).put("f",family).put("q",e.getValue()).put("by",actor).put("at",Instant.now().toString()).put("motherCorrected",true);RafdMoney.attach(row,c,e.getValue());rows.put(row);audit(s,k,actor,reason,op,null,row);}
         }
         return tasks.size();
     }
