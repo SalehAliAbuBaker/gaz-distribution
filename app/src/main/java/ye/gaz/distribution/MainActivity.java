@@ -61,7 +61,7 @@ public final class MainActivity extends Activity {
     private void activationScreen(){
         LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(p);p.setBackgroundColor(Color.WHITE);
         TextView title=new TextView(this);title.setText("رفد");title.setTextSize(32);title.setTextColor(Color.rgb(0,94,88));title.setGravity(android.view.Gravity.CENTER);p.addView(title);
-        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.8");
+        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.9");
         pairText(p,"أرسل معرّف الجهاز إلى المطور لطلب التصريح. تظل البيانات محفوظة حتى عند انتهاء التصريح.");
         TextView code=new TextView(this);code.setText(displayPermitDevice());code.setTextIsSelectable(true);code.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);code.setTextSize(17);code.setGravity(android.view.Gravity.CENTER);p.addView(code);
         pairButton(p,"نسخ معرّف الجهاز",()->copyPermitDevice());
@@ -394,12 +394,34 @@ public final class MainActivity extends Activity {
             ScrollView sc=new ScrollView(this);sc.addView(p);new AlertDialog.Builder(this).setTitle("حالة التخصيصات").setView(sc).setPositiveButton("إغلاق",null).show();
         }catch(Exception e){msg("تعذر عرض التخصيصات");}
     }
+    private static String latinDigitsNative(String source){
+        if(source==null)return "";
+        StringBuilder b=new StringBuilder(source.length());
+        for(int i=0;i<source.length();i++){
+            char c=source.charAt(i);
+            if(c>='\u0660'&&c<='\u0669')b.append((char)('0'+c-'\u0660'));
+            else if(c>='\u06f0'&&c<='\u06f9')b.append((char)('0'+c-'\u06f0'));
+            else b.append(c);
+        }
+        return b.toString();
+    }
+    private static String grantValueLabel(JSONObject grant,int quantity){
+        try{
+            long unit=grant.optLong("unitMinor",0);
+            if(unit<=0||quantity<1)return "";
+            long total=Math.multiplyExact(unit,quantity);
+            String sum=java.lang.Long.toString(total/100)+((total%100)==0?"":"."+String.format(java.util.Locale.US,"%02d",total%100));
+            String currency=grant.optString("currency","YER");
+            String label="YER".equals(currency)?"ريال يمني":"SAR".equals(currency)?"ريال سعودي":"USD".equals(currency)?"دولار أمريكي":currency;
+            return ("\n"+("cash".equals(grant.optString("valueKind"))?"مبلغ نقدي: ":"قيمة عينية مقابلة (تقديرية): ")+sum+" "+label);
+        }catch(Exception ignored){return "";}
+    }
     private void showDistributorSearchResult(String key){
         try{JSONObject user=sessionUser();boolean deliver=DistributorUsers.allowed(user,"deliver");
             if(!deliver&&!DistributorUsers.allowed(user,"view")){msg("لا توجد صلاحية للبحث");return;}
             JSONArray all=pairing.allocations();JSONObject found=null;for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);if(r.getString("key").equals(key)){found=r;break;}}
             if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
-            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالحقيبة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" عطية");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
+            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالحقيبة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" عطية"+grantValueLabel(row,row.getInt("maxQty")));pairText(p,"حالة التسليم\n"+deliveryDescription(row));
             AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
             if(deliver&&!row.getBoolean("done")&&!row.optBoolean("locked"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
             d.show();
@@ -434,7 +456,7 @@ public final class MainActivity extends Activity {
             AlertDialog dlg=new AlertDialog.Builder(this).setTitle(deliver?"تسجيل التوزيع":history?"سجل التسليم":"الأسر المخصصة").setView(p).setPositiveButton("إغلاق",null).create();int[] page={0};
             Runnable draw=()->{list.removeAllViews();java.util.ArrayList<JSONObject> matches=new java.util.ArrayList<>();String query=AllocationSelection.norm(search.getText().toString());for(int i=0;i<all.length();i++){JSONObject r=all.optJSONObject(i);if(r==null||(history&&!r.optBoolean("done")))continue;String label=r.optInt("no")+" · "+r.optString("name")+" | "+r.optString("house")+" | "+r.optString("square")+" | "+r.optString("cycleTitle");if(AllocationSelection.norm(label).contains(query))matches.add(r);}
                 int pages=Math.max(1,(matches.size()+29)/30);page[0]=Math.max(0,Math.min(page[0],pages-1));int startIndex=page[0]*30,endIndex=Math.min(matches.size(),startIndex+30);
-                for(int i=startIndex;i<endIndex;i++){JSONObject r=matches.get(i);pairText(list,r.optInt("no")+" · "+r.optString("name")+" | رابط الأسرة: "+r.optString("house")+" | مربع "+r.optString("square")+" | "+r.optString("cycleTitle")+"\n"+deliveryDescription(r));if(deliver&&!r.optBoolean("done")&&!r.optBoolean("locked"))pairButton(list,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});}
+                for(int i=startIndex;i<endIndex;i++){JSONObject r=matches.get(i);pairText(list,r.optInt("no")+" · "+r.optString("name")+" | رابط الأسرة: "+r.optString("house")+" | مربع "+r.optString("square")+" | "+r.optString("cycleTitle")+"\n"+deliveryDescription(r)+grantValueLabel(r,r.optBoolean("done")?r.optInt("q"):r.optInt("maxQty")));if(deliver&&!r.optBoolean("done")&&!r.optBoolean("locked"))pairButton(list,"تسجيل التسليم",()->{dlg.dismiss();recordDelivery(admin,r);});}
                 if(matches.isEmpty())pairText(list,"لا توجد أسر مطابقة");info.setText("صفحة "+(page[0]+1)+" / "+pages+" | "+matches.size());prev.setEnabled(page[0]>0);next.setEnabled(page[0]+1<pages);nav.setVisibility(pages>1?android.view.View.VISIBLE:android.view.View.GONE);scroll.scrollTo(0,0);};
             prev.setOnClickListener(v->{page[0]--;draw.run();});next.setOnClickListener(v->{page[0]++;draw.run();});search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int count,int after){}public void onTextChanged(CharSequence s,int st,int before,int count){page[0]=0;draw.run();}public void afterTextChanged(android.text.Editable e){}});draw.run();dlg.show();dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         }catch(Exception e){msg("تعذر قراءة السجل");}
@@ -501,7 +523,7 @@ public final class MainActivity extends Activity {
     private void recordDelivery(String admin,JSONObject row){
         if(!distributorAllowed("deliver"))return;
         EditText qty=new EditText(this);qty.setInputType(InputType.TYPE_CLASS_NUMBER);qty.setHint("عدد العطايا");qty.setText(""+row.optInt("maxQty"));
-        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" عطية. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(qty.getText().toString());pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-search-refresh'))",null);distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
+        new AlertDialog.Builder(this).setTitle("تسليم "+row.optString("name")).setMessage("الكمية لا تتجاوز "+row.optInt("maxQty")+" عطية. بعد الحفظ لا يمكن تكرار الحركة أو تعديلها في هذه النسخة.").setView(qty).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد التسليم",(d,w)->{try{if(!distributorAllowed("deliver"))return;JSONObject actor=sessionUser();int n=Integer.parseInt(latinDigitsNative(qty.getText().toString()));pairing.record(row.getString("key"),n,actor.getString("id"),actor.getString("username"));msg("تم حفظ التسليم محليًا");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-search-refresh'))",null);distributorScreen(admin);}catch(Exception e){msg("لم يتم الحفظ؛ تحقق من الكمية أو التسليم السابق");distributorScreen(admin);}}).show();
     }
     private void chooseLan(String admin){
         if(!adminAllowed(admin))return;
