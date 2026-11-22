@@ -181,7 +181,7 @@ public final class MainActivity extends Activity {
             if(role.equals("independent")){
                 pairText(p,"هذا الجهاز مستقل الآن.");
                 if(licensedRole("mother"))pairButton(p,"تعيين هذا الجهاز جوالًا أم",()->new AlertDialog.Builder(this).setTitle("تعيين الجوال الأم").setMessage("سيصبح هذا الهاتف الجهاز الأم لإدارة الكيان أو المرفق وربط الموزعين. نقل صلاحية الجهاز الأم إلى جهاز آخر غير متاح حاليًا؛ احفظ نسخة احتياطية قبل الربط.").setNegativeButton("إلغاء",null).setPositiveButton("تأكيد",(x,y)->{try{if(!adminAllowed(admin)||!licensedRole("mother"))return;pairing.becomeMother();d.dismiss();notifyPairChange();manageDevicesScreen(admin);}catch(Exception e){msg("تعذر التعيين؛ تحقق من وجود حساب مدير وحالة الربط");}}).show());
-                if(licensedRole("distributor"))pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر والدورات والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin)||!licensedRole("distributor"))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
+                if(licensedRole("distributor"))pairButton(p,"ربط هذا الجهاز كموزع",()->{EditText name=new EditText(this);name.setSingleLine(true);name.setHint("اسم الموزع أو الجهاز");new AlertDialog.Builder(this).setTitle("طلب الاقتران").setMessage("يجب أن تكون سجلات الأسر وحقائب العطايا والتسليم فارغة في هذا الجهاز.").setView(name).setNegativeButton("إلغاء",null).setPositiveButton("إظهار QR",(x,y)->{try{if(!adminAllowed(admin)||!licensedRole("distributor"))return;String packet=pairing.request(name.getText().toString());d.dismiss();notifyPairChange();showQr("طلب ربط الموزع",packet,pairing.fingerprint(), "امسح هذا الرمز بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر إنشاء الطلب؛ اختر اسمًا وتأكد أن الجهاز فارغ");}}).show();});
             }else if(role.equals("pending")){
                 pairText(p,"بانتظار موافقة الجوال الأم.");
                 pairButton(p,"عرض طلب الربط QR",()->{try{showQr("طلب ربط الموزع",s.getString("request"),pairing.fingerprint(),"امسح الطلب بالجوال الأم وقارن البصمة.");}catch(Exception e){msg("تعذر عرض الرمز");}});
@@ -193,7 +193,7 @@ public final class MainActivity extends Activity {
                 JSONObject devices=s.getJSONObject("devices");
                 pairText(p,"الأجهزة المسجلة: "+devices.length());
                 pairButton(p,"الإدارة المركزية لمستخدمي الموزعين",()->{d.dismiss();centralDevices(admin);});
-                pairButton(p,"تخصيص أسر لدورة توزيع",()->{d.dismiss();chooseAllocation(admin);});
+                pairButton(p,"تخصيص أسر لحقيبة عطايا",()->{d.dismiss();chooseAllocation(admin);});
                 pairButton(p,"عرض التخصيصات وحالات التسليم",()->{d.dismiss();motherAllocations(admin);});
                 pairButton(p,"فتح المزامنة على الشبكة المحلية",()->{d.dismiss();chooseLan(admin);});
                 for(java.util.Iterator<String> it=devices.keys();it.hasNext();){
@@ -269,8 +269,8 @@ public final class MainActivity extends Activity {
             java.util.ArrayList<String> ids=new java.util.ArrayList<>(),names=new java.util.ArrayList<>(),cycles=new java.util.ArrayList<>(),titles=new java.util.ArrayList<>();
             for(java.util.Iterator<String> it=devices.keys();it.hasNext();){String k=it.next();ids.add(k);names.add(devices.getJSONObject(k).getString("name"));}
             JSONArray list=data.getJSONArray("cycles");for(int i=0;i<list.length();i++){JSONObject c=list.getJSONObject(i);if(!c.optBoolean("closed")){cycles.add(c.getString("id"));titles.add(c.getString("title")+" · "+c.getString("date"));}}
-            if(ids.isEmpty()||cycles.isEmpty()){msg("يلزم موزع مرتبط ودورة توزيع مفتوحة");return;}
-            new AlertDialog.Builder(this).setTitle("اختر دورة التوزيع").setItems(titles.toArray(new String[0]),(d,i)->new AlertDialog.Builder(this).setTitle("اختر الموزع").setItems(names.toArray(new String[0]),(x,j)->chooseFamilies(admin,ids.get(j),cycles.get(i))).setNegativeButton("إلغاء",null).show()).setNegativeButton("إلغاء",null).show();
+            if(ids.isEmpty()||cycles.isEmpty()){msg("يلزم موزع مرتبط وحقيبة عطايا مفتوحة");return;}
+            new AlertDialog.Builder(this).setTitle("اختر حقيبة العطايا").setItems(titles.toArray(new String[0]),(d,i)->new AlertDialog.Builder(this).setTitle("اختر الموزع").setItems(names.toArray(new String[0]),(x,j)->chooseFamilies(admin,ids.get(j),cycles.get(i))).setNegativeButton("إلغاء",null).show()).setNegativeButton("إلغاء",null).show();
         }catch(Exception e){msg("تعذر قراءة التخصيصات");}
     }
     private void chooseFamilies(String admin,String child,String cycle){
@@ -278,7 +278,7 @@ public final class MainActivity extends Activity {
         try{
             JSONObject state=pairing.status(),data=new JSONObject(store.readState()),c=SyncRules.find(data.getJSONArray("cycles"),cycle);
             AllocationSelection selection=new AllocationSelection(data,SyncRules.map(state,"grants"),cycle);
-            if(selection.total()==0){msg("لا توجد أسر متاحة للتخصيص في هذه الدورة");return;}
+            if(selection.total()==0){msg("لا توجد أسر متاحة للتخصيص في هذه الحقيبة");return;}
             String childName=SyncRules.child(state,child).getString("name");
             LinearLayout p=pairLayout();pairText(p,"الموزع: "+childName+" | "+c.getString("title")+"\nالاستحقاق لكل أسرة: "+"تحسب الكمية بحسب عدد أفراد الأسرة");
             EditText search=new EditText(this);search.setSingleLine(true);search.setHint("بحث بالاسم أو الرقم أو رابط الأسرة أو المربع");p.addView(search);
@@ -315,7 +315,7 @@ public final class MainActivity extends Activity {
             dlg.setOnShowListener(v->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{
                 if(selection.count()==0){msg("حدد أسرة واحدة على الأقل");return;}
                 final java.util.List<String> ids=selection.ids();
-                new AlertDialog.Builder(this).setTitle("تأكيد تخصيص "+ids.size()+" أسرة؟").setMessage("الموزع: "+childName+"\nالدورة: "+c.optString("title")+"\nسيتم حجز الأسر المحددة حصريًا لهذا الموزع. تشمل العملية أي أسر حددتها في مربعات أو نتائج بحث سابقة.").setNegativeButton("رجوع",null).setPositiveButton("تأكيد",(x,y)->{
+                new AlertDialog.Builder(this).setTitle("تأكيد تخصيص "+ids.size()+" أسرة؟").setMessage("الموزع: "+childName+"\nالحقيبة: "+c.optString("title")+"\nسيتم حجز الأسر المحددة حصريًا لهذا الموزع. تشمل العملية أي أسر حددتها في مربعات أو نتائج بحث سابقة.").setNegativeButton("رجوع",null).setPositiveButton("تأكيد",(x,y)->{
                     if(!adminAllowed(admin))return;
                     ProgressDialog busy=ProgressDialog.show(this,"التخصيص","جارٍ حفظ التخصيصات…",true,false);
                     workers.execute(()->{try{synchronized(store){if(!store.admin(admin))throw new SecurityException("Admin required");pairing.allocate(child,cycle,ids);}runOnUiThread(()->{busy.dismiss();dlg.dismiss();notifyPairChange();msg("تم تخصيص "+ids.size()+" أسرة؛ بانتظار المزامنة");});}catch(Exception e){runOnUiThread(()->{busy.dismiss();msg("تعذر التخصيص؛ قد تكون إحدى الأسر حُجزت أو استلمت بالفعل. لم تُعتمد دفعة جزئية.");});}});
@@ -328,7 +328,7 @@ public final class MainActivity extends Activity {
         if(!adminAllowed(admin))return;
         try{String key=SyncRules.key(cycle,family);JSONObject state=pairing.status();if(!"mother".equals(state.getString("role")))return;
             JSONObject local=new JSONObject(store.readState()),grant=SyncWire.peek(SyncRules.map(state,"grants").getString(key)),f=SyncRules.find(local.getJSONArray("families"),family),c=SyncRules.find(local.getJSONArray("cycles"),cycle),d=SyncRules.delivery(local,cycle,family);
-            if(c==null||c.optBoolean("closed")){msg("أعد فتح الدورة أولًا");return;}
+            if(c==null||c.optBoolean("closed")){msg("أعد فتح الحقيبة أولًا");return;}
             boolean resolved=MotherDelivery.resolved(state,key);
             if("recall".equals(action)){if(resolved||MotherDelivery.control(state,key)!=null){msg("تمت التسوية أو طلب الاسترداد بالفعل");return;}}
             else if(!resolved){msg("استرد صلاحية التسليم من الموزع أولًا");return;}
@@ -350,7 +350,7 @@ public final class MainActivity extends Activity {
             boolean deletion="delete".equals(action);if(!deletion&&!"add".equals(action))return;JSONObject requested=new JSONObject(json);int count=requested.length();
             if(deletion){count=0;JSONArray a=local.getJSONArray("deliveries");for(int i=0;i<a.length();i++)if(cycle.equals(a.getJSONObject(i).getString("c")))count++;}
             if(count==0){msg("لا توجد حركات محددة");return;}final int expected=count;
-            LinearLayout p=pairLayout();pairText(p,c.getString("title")+" | "+count+" أسرة\n"+(deletion?"ستُحذف جميع حركات الدورة الحالية، مع حفظ سجل التصحيحات والإيصالات الموقعة.":"ستُعتمد الكميات المحددة للأسر المتاحة للأم فقط."));
+            LinearLayout p=pairLayout();pairText(p,c.getString("title")+" | "+count+" أسرة\n"+(deletion?"ستُحذف جميع حركات الحقيبة الحالية، مع حفظ سجل التصحيحات والإيصالات الموقعة.":"ستُعتمد الكميات المحددة للأسر المتاحة للأم فقط."));
             EditText reason=new EditText(this);reason.setHint("سبب الإجراء (مطلوب)");reason.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});p.addView(reason);
             AlertDialog d=new AlertDialog.Builder(this).setTitle(deletion?"حذف حركات الكشف":"تسليم جماعي من الأم").setView(p).setNegativeButton("إلغاء",null).setPositiveButton("اعتماد",null).create();
             d.setOnShowListener(v->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{String why=reason.getText().toString().trim();if(why.isEmpty()){reason.setError("أدخل السبب");return;}if(!adminAllowed(admin))return;
@@ -379,7 +379,7 @@ public final class MainActivity extends Activity {
             if(!deliver&&!DistributorUsers.allowed(user,"view")){msg("لا توجد صلاحية للبحث");return;}
             JSONArray all=pairing.allocations();JSONObject found=null;for(int i=0;i<all.length();i++){JSONObject r=all.getJSONObject(i);if(r.getString("key").equals(key)){found=r;break;}}
             if(found==null){msg("لم يعد التخصيص متاحًا");return;}final JSONObject row=found;
-            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالدورة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" عطية");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
+            LinearLayout p=pairLayout();pairText(p,"رقم المستفيد: "+row.getInt("no"));pairText(p,"العنوان\nرابط الأسرة/رقم المنزل: "+(row.optString("house").isEmpty()?"—":row.optString("house"))+" | مربع: "+row.optString("square","—"));pairText(p,"بيانات التوزيع\nالحقيبة: "+row.getString("cycleTitle")+"\nالاستحقاق: "+row.getInt("maxQty")+" عطية");pairText(p,"حالة التسليم\n"+deliveryDescription(row));
             AlertDialog d=new AlertDialog.Builder(this).setTitle(row.getString("name")).setView(p).setPositiveButton("إغلاق",null).create();
             if(deliver&&!row.getBoolean("done")&&!row.optBoolean("locked"))pairButton(p,"تسجيل التسليم",()->{d.dismiss();recordDelivery(user.optString("id"),row);});
             d.show();
@@ -408,7 +408,7 @@ public final class MainActivity extends Activity {
     private void readDistributorRows(boolean history){pagedDistributorRows(history,false,null);}
     private void pagedDistributorRows(boolean history,boolean deliver,String admin){
         if(!distributorAllowed(deliver?"deliver":history?"history":"view"))return;
-        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو رابط الأسرة أو المربع أو الدورة");p.addView(search);
+        try{JSONArray all=pairing.allocations();LinearLayout p=pairLayout();EditText search=new EditText(this);search.setSingleLine(true);search.setHint("البحث بالاسم أو رابط الأسرة أو المربع أو الحقيبة");p.addView(search);
             LinearLayout list=pairLayout();ScrollView scroll=new ScrollView(this);scroll.addView(list);int height=(int)(Math.min(340,getResources().getDisplayMetrics().heightPixels/getResources().getDisplayMetrics().density*0.38f)*getResources().getDisplayMetrics().density);p.addView(scroll,new LinearLayout.LayoutParams(-1,height));
             LinearLayout nav=new LinearLayout(this);Button prev=new Button(this),next=new Button(this);TextView info=new TextView(this);prev.setText("السابق");next.setText("التالي");nav.addView(prev,new LinearLayout.LayoutParams(0,-2,1));nav.addView(info,new LinearLayout.LayoutParams(0,-2,2));nav.addView(next,new LinearLayout.LayoutParams(0,-2,1));info.setGravity(android.view.Gravity.CENTER);p.addView(nav);
             AlertDialog dlg=new AlertDialog.Builder(this).setTitle(deliver?"تسجيل التوزيع":history?"سجل التسليم":"الأسر المخصصة").setView(p).setPositiveButton("إغلاق",null).create();int[] page={0};
@@ -675,7 +675,7 @@ public final class MainActivity extends Activity {
             workers.execute(()->{try{if(backup){byte[] encrypted=store.backup(pass);File f=tempFile("rafd_backup_"+System.currentTimeMillis(),".json.gz",encrypted);runOnUiThread(()->{if(!backupAllowed(admin))return;if(cloud&&"email".equals(destination))emailBackup(f,email);else if(cloud&&"drive".equals(destination)){msg(email.isEmpty()?"اختر Drive في منتقي الملفات":"اختر Drive والحساب "+email+" في منتقي الملفات");savePicker(f,"application/gzip");}else if(cloud)cloudShare(f);else savePicker(f,"application/gzip");});}else{
                 byte[] bytes;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();bytes=readLimited(in);}
                 String json=GazStore.decodeBackup(bytes,pass);JSONObject checked=store.previewRestore(json);boolean mother="mother".equals(store.role());
-                String summary="الأسر: "+checked.getJSONArray("families").length()+" | الدورات: "+checked.getJSONArray("cycles").length()+" | حركات التسليم: "+checked.getJSONArray("deliveries").length();
+                String summary="الأسر: "+checked.getJSONArray("families").length()+" | الحقائب: "+checked.getJSONArray("cycles").length()+" | حركات التسليم: "+checked.getJSONArray("deliveries").length();
                 runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تأكيد استعادة النسخة").setMessage(summary+"\n\n"+(mother?"سيتم استعادة البيانات المتوافقة مع سجل التسليم الحالي، دون تغيير هوية الأم أو التخصيصات أو المستخدمين والصلاحيات.":"ستستبدل البيانات والحسابات المحلية. احفظ نسخة حالية أولًا.")).setNegativeButton("إلغاء",null).setPositiveButton("استعادة",(d,b)->{if(!backupAllowed(admin))return;closeLan();workers.execute(()->{try{synchronized(store){if(!store.admin(admin))throw new SecurityException("Admin required");store.restoreSafe(json);}runOnUiThread(()->{if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('gaz-restore-complete'))",null);});msg("تمت الاستعادة بنجاح");}catch(BackupRestore.Refused e){restoreWarning(e.getMessage());}catch(Exception e){restoreWarning("فشلت الاستعادة؛ لم تُعتمد بيانات جديدة");}});}).show());
             }}catch(BackupRestore.Refused e){restoreWarning(e.getMessage());}catch(Exception e){msg(backup?"تعذر إنشاء النسخة الاحتياطية":"تعذر فتح النسخة؛ تحقق من الملف وكلمة المرور");}finally{Arrays.fill(pass,'\0');}});
         }));dialog.show();

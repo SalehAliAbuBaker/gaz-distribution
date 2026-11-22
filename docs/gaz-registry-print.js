@@ -34,7 +34,7 @@ function definition(s,barcode){
  for(let j=0;j<group.length;j+=2){
   const item=f=>{
    const label=(value)=>({text:String(value==null||value===''?'—':value),fontSize:9});
-   const pair=(a,b)=>({columns:[{...label(a),width:'50%',alignment:'right'},{...label(b),width:'50%',alignment:'right'}],columnGap:4,margin:[0,3,0,0]});
+   const pair=(a,b)=>({columns:[{...label(b),width:'50%',alignment:'right'},{...label(a),width:'50%',alignment:'right'}],columnGap:4,margin:[0,3,0,0]});
    const stack=[
     {text:s.entity||'الكيان غير محدد',fontSize:12,alignment:'center',bold:true,margin:[0,0,0,5]},
     {text:f.name,alignment:'center',bold:true,fontSize:13,margin:[0,0,0,7]},
