@@ -472,9 +472,22 @@ document.addEventListener('beforeinput',ev=>{
  if(!el||!el.matches?.('input, textarea')||!ev.data)return;
  const replacement=latinDigits(ev.data);
  if(replacement===ev.data)return;
- try{if(el.type==='number'||el.type==='date')return;const start=el.selectionStart,end=el.selectionEnd;ev.preventDefault();el.setRangeText(replacement,start,end,'end');el.dispatchEvent(new Event('input',{bubbles:true}))}catch{}
+ try{
+ if(el.type==='date')return;
+ if(el.type==='number'){
+  ev.preventDefault();
+  const value=latinDigits(el.value)+replacement;
+  if(/^-?\d*(?:\.\d*)?$/.test(value)){el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}))}
+  return;
+ }
+ const start=el.selectionStart,end=el.selectionEnd;ev.preventDefault();el.setRangeText(replacement,start,end,'end');el.dispatchEvent(new Event('input',{bubbles:true}))
+}catch{}
 },true);
 document.querySelectorAll('input,textarea').forEach(el=>{el.setAttribute('lang','en-US');if(['number','date','datetime-local','time'].includes(el.type)){el.setAttribute('dir','ltr');el.style.fontVariantNumeric='tabular-nums'}});
+document.addEventListener('focusin',ev=>{const el=ev.target;if(!el?.matches?.('input,textarea'))return;el.setAttribute('lang','en-US');
+ if(['number','date','datetime-local','time'].includes(el.type)){el.dir='ltr';el.style.fontVariantNumeric='tabular-nums'}
+ if(el.type!=='date'&&el.value!==latinDigits(el.value))el.value=latinDigits(el.value);
+},true);
 
 function aidThreshold(value){if(value==null||String(value).trim()==='')return null;const s=String(value).trim();if(!/^\d+$/.test(s))throw Error('أدخل عدد أفراد صحيحًا');const n=Number(s);if(!Number.isSafeInteger(n)||n<1||n>1000000)throw Error('أدخل عدد أفراد صحيحًا موجبًا');return n}
 function aidRules(c){const two=aidThreshold(c.aidTwoAbove),three=aidThreshold(c.aidThreeAbove);if(two!==null&&three!==null&&three<=two)throw Error('حد الثلاث عطايا يجب أن يكون أكبر من حد العطيتين');if((two!==null||three!==null)&&Number(c.quota)!==1)throw Error('اجعل عدد العطايا الافتراضي 1 لتفعيل الاحتساب بحسب أفراد الأسرة');return {two,three}}
