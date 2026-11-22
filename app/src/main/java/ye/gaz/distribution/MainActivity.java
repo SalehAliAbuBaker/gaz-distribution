@@ -57,7 +57,7 @@ public final class MainActivity extends Activity {
     private boolean distributorSetupOnly(){return activePermit!=null&&"distributor".equals(activePermit.role)&&!isDistributor();}
     private String displayPermitDevice(){return RafdPermit.displayCode(license.code);}
     private void copyPermitDevice(){android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Rafd device",displayPermitDevice()));msg("تم نسخ معرّف الجهاز");}
-    private void sharePermitDevice(){Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,"طلب تصريح تشغيل رفد\\nمعرّف الجهاز: "+displayPermitDevice());startActivity(Intent.createChooser(i,"إرسال معرّف الجهاز"));}
+    private void sharePermitDevice(){Intent i=new Intent(Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,displayPermitDevice());startActivity(Intent.createChooser(i,"إرسال معرّف الجهاز"));}
     private void activationScreen(){
         LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(p);p.setBackgroundColor(Color.WHITE);
         TextView title=new TextView(this);title.setText("رفد");title.setTextSize(32);title.setTextColor(Color.rgb(0,94,88));title.setGravity(android.view.Gravity.CENTER);p.addView(title);
