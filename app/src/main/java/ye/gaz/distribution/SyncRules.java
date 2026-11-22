@@ -99,7 +99,7 @@ final class SyncRules {
             JSONObject fb=find(old.getJSONArray("families"),f),fa=find(next.getJSONArray("families"),f);
             require(before!=null&&after!=null&&fb!=null&&fa!=null,"Allocated cycle/family cannot be removed");
             for(String field:new String[]{"title","date","quota"})require(String.valueOf(before.get(field)).equals(String.valueOf(after.get(field))),"Allocated cycle cannot be changed");
-            for(String field:new String[]{"valueKind","currency","unitMinor"})require(String.valueOf(before.opt(field)).equals(String.valueOf(after.opt(field))),"Allocated bag value cannot be changed");
+            require(RafdMoney.kind(before).equals(RafdMoney.kind(after))&&RafdMoney.currency(before).equals(RafdMoney.currency(after))&&RafdMoney.unit(before)==RafdMoney.unit(after),"Allocated bag value cannot be changed");
             for(String field:new String[]{"aidTwoAbove","aidThreeAbove"})require(AidQuota.threshold(before,field)==AidQuota.threshold(after,field),"Allocated cycle aid rules cannot be changed");
             for(String field:new String[]{"name","no"})require(String.valueOf(fb.get(field)).equals(String.valueOf(fa.get(field))),"Allocated family cannot be changed");
             require(!after.optBoolean("closed")||MotherDelivery.resolved(s,k),"Outstanding allocation");
