@@ -110,6 +110,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean writeState(String json){try{if(!permitValid())return false;if(distributorSetupOnly()){JSONObject n=new JSONObject(json);for(String k:new String[]{"families","cycles","deliveries"})if(n.getJSONArray(k).length()!=0)return false;}store.writeLocalState(json);return true;}catch(Exception e){return false;}}
         @JavascriptInterface public String licensedRole(){return permitValid()?activePermit.role:"";}
         @JavascriptInterface public void licenseInfo(){runOnUiThread(()->showPermitInfo());}
+        @JavascriptInterface public void scanRegistryBarcode(){runOnUiThread(()->startRegistryBarcodeScan());}
         @JavascriptInterface public String deviceId(){return device;}
         @JavascriptInterface public boolean biometricEnabled(){return permitValid()&&biometric!=null&&biometric.enabled();}
         @JavascriptInterface public void biometricLogin(){runOnUiThread(()->loginWithBiometric());}
@@ -521,6 +522,17 @@ public final class MainActivity extends Activity {
             catch(Exception e){runOnUiThread(()->{busy.dismiss();new AlertDialog.Builder(this).setTitle("لم تكتمل المزامنة").setMessage(GazLan.diagnostic(e)+"\nحركاتك محفوظة. أرسل صورة هذه الرسالة عند تكرار المشكلة.").setPositiveButton("إغلاق",null).show();});}});
     }
 
+    private void startRegistryBarcodeScan(){
+        if(web==null||!permitValid()||isDistributor()||scanMode!=null){if(scanMode!=null)msg("يوجد مسح آخر قيد التنفيذ");return;}
+        scanMode="registry";scanAdmin=null;
+        try{new IntentIntegrator(this)
+            .setDesiredBarcodeFormats(BarcodeFormat.CODE_39.name())
+            .setCaptureActivity(PortraitCaptureActivity.class)
+            .setPrompt("وجّه الكاميرا إلى باركود بطاقة المسجل")
+            .setBeepEnabled(false)
+            .setOrientationLocked(true).initiateScan();
+        }catch(Exception e){scanMode=null;msg("تعذر فتح الكاميرا. يمكنك البحث برمز البطاقة يدويًا.");}
+    }
     private void scanQr(String mode,String admin){
         if("policy".equals(mode)?!isDistributor():"sync".equals(mode)?!syncAllowed(admin):!adminAllowed(admin))return;
         scanMode=mode;scanAdmin=admin;
@@ -672,7 +684,12 @@ public final class MainActivity extends Activity {
     private static byte[] readLimited(InputStream in)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1){if(out.size()+n>GazStore.MAX)throw new IOException("Too large");out.write(b,0,n);}return out.toByteArray();}
     @Override protected void onActivityResult(int req,int result,Intent data){
         IntentResult scan=IntentIntegrator.parseActivityResult(req,result,data);
-        if(scan!=null){String mode=scanMode,admin=scanAdmin;scanMode=null;scanAdmin=null;if(scan.getContents()!=null&&mode!=null&&admin!=null)handlePairScan(mode,admin,scan.getContents());return;}
+        if(scan!=null){String mode=scanMode,admin=scanAdmin;scanMode=null;scanAdmin=null;
+            if("registry".equals(mode)){
+                if(scan.getContents()!=null&&web!=null&&!isDistributor()&&permitValid())web.evaluateJavascript("window.rafdRegistryScanned("+JSONObject.quote(scan.getContents())+")",null);
+                return;
+            }
+            if(scan.getContents()!=null&&mode!=null&&admin!=null)handlePairScan(mode,admin,scan.getContents());return;}
         super.onActivityResult(req,result,data);
         if(req==SAVE){File f=pending;pending=null;if(result==RESULT_OK&&data!=null&&data.getData()!=null&&f!=null){
             Uri uri=data.getData();workers.execute(()->{try(InputStream in=new FileInputStream(f);OutputStream out=getContentResolver().openOutputStream(uri,"w")){if(out==null)throw new IOException();byte[] b=new byte[16384];int n;while((n=in.read(b))!=-1)out.write(b,0,n);out.flush();msg("تم حفظ الملف");}catch(Exception e){msg("تعذر حفظ الملف");}});
