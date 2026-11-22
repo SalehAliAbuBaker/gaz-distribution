@@ -46,7 +46,7 @@ jobs:
           "$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
           aapt="$ANDROID_HOME/build-tools/34.0.0/aapt"
           "$aapt" dump badging app/build/outputs/apk/debug/app-debug.apk > apk-badging.txt
-          grep -F "versionName='1.0.6'" apk-badging.txt
+          grep -F "versionName='1.0.7'" apk-badging.txt
           grep -E 'application-icon|icon=' apk-badging.txt
           gh release download v0.2.1-test --pattern Gaz-Distribution-0.2.1-test.apk --dir previous-apk
           old=$("$apksigner" verify --print-certs previous-apk/Gaz-Distribution-0.2.1-test.apk | grep 'certificate SHA-256 digest:' | sort)
@@ -59,7 +59,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Rafd-1.0.6-test
+          name: Rafd-1.0.7-test
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Prepare owner offline signing package
@@ -74,7 +74,7 @@ jobs:
           (cd signing-input && sha256sum gaz-unsigned-aligned.apk apksigner.jar > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
-          name: Rafd-1.0.6-offline-signing-input
+          name: Rafd-1.0.7-offline-signing-input
           path: signing-input/
           if-no-files-found: error
       - name: Prepare issuer offline signing package

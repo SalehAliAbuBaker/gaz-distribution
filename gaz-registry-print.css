@@ -11,4 +11,4 @@
 @media print{body.rr-open>header,body.rr-open>main,body.rr-open>#rafdNav,body.rr-open>.rafd-nav,body.rr-open>#gazPreview{display:none!important}body.rr-open #rafdRegistryPreview{position:static;background:white;display:block!important}body.rr-open #rafdRegistryPreview .rr-head,body.rr-open #rafdRegistryPreview .rr-tools,body.rr-open #rrStatus{display:none!important}body.rr-open #rafdRegistryPreview .rr-scroll{overflow:visible;padding:0}body.rr-open #rrPaper{padding:0;box-shadow:none;max-width:none;min-height:0}body.rr-open .rr-card-grid{grid-template-columns:repeat(2,1fr);gap:6mm}@page{size:A4;margin:12mm}}
 .rr-card-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start}
 .rr-card-pair>span{min-width:0;overflow-wrap:anywhere}
-.rr-card-title{font-size:13px!important}
+.rr-card-title{font-size:13px!important;color:#005e58!important;text-decoration:underline;text-decoration-color:#005e58;text-decoration-thickness:1.5px;text-underline-offset:5px;line-height:1.6}

@@ -19,7 +19,7 @@ function hCard(f){
  pair('المنطقة',f.area,'المربع',f.square)+
  (barcodeOn()?'<div class="rr-barcode">'+codeSVG(f.code)+'<span dir="ltr">'+safe(f.code)+'</span></div>':'')+'</article>';
 }
-function renderHTML(){const s=current;if(!s)return;let head='<div class="rr-doc-head"><div>بسم الله الرحمن الرحيم</div><strong>'+safe(s.entity||'')+'</strong><small>'+safe(s.letterhead||'')+'</small><h2>'+(s.mode==='list'?'كشف المسجلين':'بطاقات المسجلين')+'</h2><small>العدد: '+s.rows.length+'</small></div>';if(s.mode==='cards'){$('rrPaper').innerHTML=head+'<div class="rr-card-grid">'+s.rows.map(hCard).join('')+'</div>';return;}const titles=['م','رقم المسجل','الاسم','رقم الهوية','رابط الأسرة','المربع','الأفراد','الهاتف'];let rows=s.rows.map((f,i)=>'<tr>'+[i+1,f.no,f.name,f.identityNo||'—',f.house||'—',f.square||'—',f.members,f.phone||'—'].map(t=>'<td>'+safe(t)+'</td>').join('')+'</tr>').join('');$('rrPaper').innerHTML=head+'<table class="rr-list"><thead><tr>'+titles.map(t=>'<th>'+safe(t)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>'}
+function renderHTML(){const s=current;if(!s)return;let head='<div class="rr-doc-head"><div>بسم الله الرحمن الرحيم</div><strong>'+safe(s.entity||'')+'</strong><small>'+safe(s.letterhead||'')+'</small><h2>'+(s.mode==='list'?'كشف المسجلين':'بطاقات المسجلين')+'</h2><small>العدد: '+s.rows.length+'</small></div>';if(s.mode==='cards'){$('rrPaper').innerHTML=head+'<div class="rr-card-grid">'+s.rows.map(hCard).join('')+'</div>';return;}const titles=['م','رقم المسجل','الاسم','رقم الهوية','رابط الأسرة','المربع','الأفراد','الهاتف'];let rows=s.rows.map((f,i)=>'<tr>'+[i+1,f.no,f.name,f.identityNo||'—',f.house||'—',f.square||'—',f.members,f.phone||'—'].map(t=>'<td>'+safe(t)+'</td>').join('')+'</tr>').join('');$('rrPaper').innerHTML=head+'<table class="rr-list"><colgroup><col style="width:5%"><col style="width:8%"><col style="width:34%"><col style="width:15%"><col style="width:13%"><col style="width:7%"><col style="width:6%"><col style="width:12%"></colgroup><thead><tr>'+titles.map(t=>'<th>'+safe(t)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>'}
 const cell=(v,opts={})=>({text:String(v??''),alignment:'right',...opts});
 function reportHeader(s,title){const v=[{text:'بسم الله الرحمن الرحيم',alignment:'center',bold:true,fontSize:12,margin:[0,0,0,5]}];if(s.entity)v.push({text:s.entity,alignment:'center',fontSize:13,bold:true});if(s.letterhead)v.push({text:s.letterhead,alignment:'center',fontSize:10});if(s.address)v.push({text:s.address,alignment:'center',fontSize:9});v.push({text:title,alignment:'center',fontSize:16,bold:true,margin:[0,8,0,7]},{text:'عدد المسجلين: '+s.rows.length,alignment:'right',fontSize:9,margin:[0,0,0,7]});return v}
 function definition(s,barcode){
@@ -27,7 +27,7 @@ function definition(s,barcode){
  if(s.mode==='list'){
    const head=['م','رقم المسجل','الاسم','رقم الهوية','رابط الأسرة','المربع','الأفراد','الهاتف'].reverse().map(t=>cell(t,{bold:true,alignment:'center',fillColor:'#e7f1ed'}));
    const body=[head];for(let i=0;i<s.rows.length;i++){const r=s.rows[i];body.push([i+1,r.no,r.name,r.identityNo||'—',r.house||'—',r.square||'—',r.members,r.phone||'—'].reverse().map(cellText=>cell(cellText)))}
-   return {...base,pageOrientation:'landscape',content:[...reportHeader(s,'كشف المسجلين'),{table:{headerRows:1,widths:[75,42,42,90,'*',80,58,22],body,dontBreakRows:true},layout:{hLineWidth:()=>.4,vLineWidth:()=>.4,hLineColor:()=> '#a0b3ac',vLineColor:()=> '#a0b3ac'}}]};
+   return {...base,pageOrientation:'landscape',content:[...reportHeader(s,'كشف المسجلين'),{table:{headerRows:1,widths:[75,42,42,90,105,'*',58,22],body,dontBreakRows:true},layout:{hLineWidth:()=>.4,vLineWidth:()=>.4,hLineColor:()=> '#a0b3ac',vLineColor:()=> '#a0b3ac'}}]};
  }
  const cards=[];for(let i=0;i<s.rows.length;i+=6){
  const group=s.rows.slice(i,i+6),body=[];
@@ -36,7 +36,7 @@ function definition(s,barcode){
    const label=(value)=>({text:String(value==null||value===''?'—':value),fontSize:9});
    const pair=(a,b)=>({columns:[{...label(b),width:'50%',alignment:'right'},{...label(a),width:'50%',alignment:'right'}],columnGap:4,margin:[0,3,0,0]});
    const stack=[
-    {text:s.entity||'الكيان غير محدد',fontSize:12,alignment:'center',bold:true,margin:[0,0,0,5]},
+    {text:s.entity||'الكيان غير محدد',fontSize:12,alignment:'center',bold:true,color:'#005e58',decoration:'underline',decorationColor:'#005e58',margin:[0,0,0,7]},
     {text:f.name,alignment:'center',bold:true,fontSize:13,margin:[0,0,0,7]},
     label('رقم المسجل: '+f.no),
     {...label('رابط الأسرة: '+(f.house||'—')),margin:[0,4,0,0]},
