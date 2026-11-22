@@ -68,17 +68,37 @@ public final class MainActivity extends Activity {
         pairButton(p,"مشاركة معرّف الجهاز",()->sharePermitDevice());
         EditText token=new EditText(this);token.setHint("ألصق كود التصريح هنا");token.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);token.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);token.setMaxLines(5);p.addView(token);
         pairButton(p,"تفعيل التطبيق",()->activatePermit(token));
+        pairButton(p,"تطبيق إشعار إيقاف موقّع",()->showStopImport());
         pairButton(p,"الخروج",()->confirmExit());setContentView(sc);
     }
     private void activatePermit(EditText token){
         try{license.install(token.getText().toString(),store.role());activePermit=license.verify(store.role());token.setText("");msg("تم تفعيل التصريح");recreate();}
         catch(Exception e){token.setError("التصريح غير صالح لهذا الجهاز أو لدوره، أو انتهت مدته. تحقق من التاريخ والكود.");}
     }
+    private void showStopImport(){
+        if(license==null){msg("تعذر قراءة تصريح الجهاز");return;}
+        LinearLayout p=pairLayout();
+        pairText(p,"ألصق إشعار الإيقاف RFR1 الصادر من تطبيق تصاريح رفد. يُتحقق من توقيعه ومعرّف الجهاز؛ عند تطبيق إشعار يخص التصريح الحالي يتوقف تشغيل رفد مع الاحتفاظ بكل البيانات. لا ترسل رمز تفعيل جديد بدل إشعار الإيقاف.");
+        EditText input=new EditText(this);input.setHint("RFR1. ...");input.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setMinLines(3);input.setMaxLines(6);p.addView(input);
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("تطبيق إشعار إيقاف التصريح")
+          .setView(p).setNegativeButton("إلغاء",null).setPositiveButton("التحقق والتطبيق",null).create();
+        d.setOnShowListener(a->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{
+                boolean activeStopped=license.importStop(input.getText().toString());
+                d.dismiss();input.setText("");
+                if(activeStopped){msg("تم تطبيق إيقاف التصريح. بياناتك محفوظة.");recreate();}
+                else msg("تم حفظ إشعار إيقاف موقّع لتصريح سابق على هذا الجهاز");
+            }catch(Exception e){input.setError("إشعار غير صالح أو غير موقّع أو يخص جهازًا آخر");}
+        }));d.show();
+    }
     private void showPermitInfo(){
         if(!permitValid()){recreate();return;}
         RafdPermit p=activePermit;LinearLayout layout=pairLayout();
         pairText(layout,"معرّف الجهاز: "+displayPermitDevice()+"\\nنوع التصريح: "+("mother".equals(p.role)?"الجهاز الأم":"موزع")+"\\nالانتهاء: "+(p.expiry==0?"دائم":new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.ROOT).format(new java.util.Date(p.expiry*1000L)))+(p.entity.isEmpty()?"":"\\nالكيان: "+p.entity)+(p.holder.isEmpty()?"":"\\nصاحب الجهاز: "+p.holder));
         pairButton(layout,"نسخ معرّف الجهاز",()->copyPermitDevice());pairButton(layout,"مشاركة معرّف الجهاز",()->sharePermitDevice());
+        pairButton(layout,"تطبيق إشعار إيقاف موقّع",()->showStopImport());
         EditText token=new EditText(this);token.setHint("كود تصريح جديد (للتجديد)");token.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);token.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);token.setMaxLines(5);layout.addView(token);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("تصريح التشغيل").setView(layout).setNegativeButton("إغلاق",null).setPositiveButton("تجديد التصريح",null).create();
         dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->activatePermit(token)));dialog.show();
