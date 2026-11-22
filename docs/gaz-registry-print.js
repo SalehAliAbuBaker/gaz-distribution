@@ -9,7 +9,16 @@ host.innerHTML='<div class="rr-head"><strong id="rrTitle">معاينة</strong><
 document.body.append(host);let current=null,prepared=null,serial=0;
 function allowed(){return typeof can==='function'&&can('view')&&can('reports')&&!pairRestricted&&deviceRole!=='distributor'}
 function barcodeOn(){return !!current&&current.mode==='cards'&&$('rrBarcodeCheck').checked}
-function hCard(f){return '<article class="rr-card"><strong class="rr-card-title">رفد | بطاقة مسجل</strong><b class="rr-card-name">'+safe(f.name)+'</b><div>رقم المسجل: '+safe(f.no)+'</div><div>رقم الهوية: '+safe(f.identityNo||'—')+'</div><div>رابط الأسرة: '+safe(f.house||'—')+' | المربع: '+safe(f.square||'—')+'</div><div>المنطقة: '+safe(f.area||'—')+'</div><div>رقم الهاتف: <span dir="ltr">'+safe(f.phone||'—')+'</span></div><div>عدد الأفراد: '+safe(f.members)+'</div>'+(barcodeOn()?'<div class="rr-barcode">'+codeSVG(f.code)+'<span dir="ltr">'+safe(f.code)+'</span></div>':'')+'</article>'}
+function hCard(f){
+ const pair=(al,av,bl,bv)=>'<div class="rr-card-pair"><span>'+safe(al)+': '+safe(av||'—')+'</span><span>'+safe(bl)+': '+safe(bv||'—')+'</span></div>';
+ return '<article class="rr-card"><strong class="rr-card-title">'+safe(current?.entity||'الكيان غير محدد')+'</strong>'+
+ '<b class="rr-card-name">'+safe(f.name)+'</b>'+
+ '<div>رقم المسجل: '+safe(f.no)+'</div>'+
+ '<div>رابط الأسرة: '+safe(f.house||'—')+'</div>'+
+ pair('عدد أفراد الأسرة',f.members,'رقم الهاتف',f.phone)+
+ pair('المنطقة',f.area,'المربع',f.square)+
+ (barcodeOn()?'<div class="rr-barcode">'+codeSVG(f.code)+'<span dir="ltr">'+safe(f.code)+'</span></div>':'')+'</article>';
+}
 function renderHTML(){const s=current;if(!s)return;let head='<div class="rr-doc-head"><div>بسم الله الرحمن الرحيم</div><strong>'+safe(s.entity||'')+'</strong><small>'+safe(s.letterhead||'')+'</small><h2>'+(s.mode==='list'?'كشف المسجلين':'بطاقات المسجلين')+'</h2><small>العدد: '+s.rows.length+'</small></div>';if(s.mode==='cards'){$('rrPaper').innerHTML=head+'<div class="rr-card-grid">'+s.rows.map(hCard).join('')+'</div>';return;}const titles=['م','رقم المسجل','الاسم','رقم الهوية','رابط الأسرة','المربع','الأفراد','الهاتف'];let rows=s.rows.map((f,i)=>'<tr>'+[i+1,f.no,f.name,f.identityNo||'—',f.house||'—',f.square||'—',f.members,f.phone||'—'].map(t=>'<td>'+safe(t)+'</td>').join('')+'</tr>').join('');$('rrPaper').innerHTML=head+'<table class="rr-list"><thead><tr>'+titles.map(t=>'<th>'+safe(t)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table>'}
 const cell=(v,opts={})=>({text:String(v??''),alignment:'right',...opts});
 function reportHeader(s,title){const v=[{text:'بسم الله الرحمن الرحيم',alignment:'center',bold:true,fontSize:12,margin:[0,0,0,5]}];if(s.entity)v.push({text:s.entity,alignment:'center',fontSize:13,bold:true});if(s.letterhead)v.push({text:s.letterhead,alignment:'center',fontSize:10});if(s.address)v.push({text:s.address,alignment:'center',fontSize:9});v.push({text:title,alignment:'center',fontSize:16,bold:true,margin:[0,8,0,7]},{text:'عدد المسجلين: '+s.rows.length,alignment:'right',fontSize:9,margin:[0,0,0,7]});return v}
@@ -20,7 +29,27 @@ function definition(s,barcode){
    const body=[head];for(let i=0;i<s.rows.length;i++){const r=s.rows[i];body.push([i+1,r.no,r.name,r.identityNo||'—',r.house||'—',r.square||'—',r.members,r.phone||'—'].reverse().map(cellText=>cell(cellText)))}
    return {...base,pageOrientation:'landscape',content:[...reportHeader(s,'كشف المسجلين'),{table:{headerRows:1,widths:[75,42,42,90,'*',80,58,22],body,dontBreakRows:true},layout:{hLineWidth:()=>.4,vLineWidth:()=>.4,hLineColor:()=> '#a0b3ac',vLineColor:()=> '#a0b3ac'}}]};
  }
- const cards=[];for(let i=0;i<s.rows.length;i+=6){const group=s.rows.slice(i,i+6),body=[];for(let j=0;j<group.length;j+=2){const item=f=>{const stack=[{text:s.entity||'رفد',fontSize:11,alignment:'center',bold:true},{text:'بطاقة مسجل',alignment:'center',color:'#005e58',fontSize:9},{text:f.name,alignment:'center',bold:true,fontSize:13,margin:[0,4,0,6]},{text:'رقم المسجل: '+f.no},{text:'رقم الهوية: '+(f.identityNo||'—')},{text:'رابط الأسرة: '+(f.house||'—')+' | المربع: '+(f.square||'—')},{text:'أفراد الأسرة: '+f.members},{text:'المنطقة: '+(f.area||'—')},{text:'رقم الهاتف: '+(f.phone||'—')}];if(barcode)stack.push({svg:codeSVG(f.code),width:207,alignment:'center',margin:[0,8,0,0]},{text:f.code,alignment:'center',fontSize:9});return {stack,margin:[6,6,6,6]}};body.push([item(group[j]),group[j+1]?item(group[j+1]):{text:''}])}cards.push({table:{widths:['*','*'],body,dontBreakRows:true},layout:{hLineWidth:()=>.6,vLineWidth:()=>.6,hLineColor:()=> '#8da9a0',vLineColor:()=> '#8da9a0',paddingLeft:()=>5,paddingRight:()=>5,paddingTop:()=>6,paddingBottom:()=>6},pageBreak:i?'before':undefined})}
+ const cards=[];for(let i=0;i<s.rows.length;i+=6){
+ const group=s.rows.slice(i,i+6),body=[];
+ for(let j=0;j<group.length;j+=2){
+  const item=f=>{
+   const label=(value)=>({text:String(value==null||value===''?'—':value),fontSize:9});
+   const pair=(a,b)=>({columns:[{...label(a),width:'50%',alignment:'right'},{...label(b),width:'50%',alignment:'right'}],columnGap:4,margin:[0,3,0,0]});
+   const stack=[
+    {text:s.entity||'الكيان غير محدد',fontSize:12,alignment:'center',bold:true,margin:[0,0,0,5]},
+    {text:f.name,alignment:'center',bold:true,fontSize:13,margin:[0,0,0,7]},
+    label('رقم المسجل: '+f.no),
+    {...label('رابط الأسرة: '+(f.house||'—')),margin:[0,4,0,0]},
+    pair('عدد أفراد الأسرة: '+f.members,'رقم الهاتف: '+(f.phone||'—')),
+    pair('المنطقة: '+(f.area||'—'),'المربع: '+(f.square||'—'))
+   ];
+   if(barcode)stack.push({svg:codeSVG(f.code),width:207,alignment:'center',margin:[0,9,0,0]},{text:f.code,alignment:'center',fontSize:9});
+   return {stack,margin:[6,7,6,7]};
+  };
+  body.push([item(group[j]),group[j+1]?item(group[j+1]):{text:''}]);
+ }
+ cards.push({table:{widths:['*','*'],body,dontBreakRows:true},layout:{hLineWidth:()=>.6,vLineWidth:()=>.6,hLineColor:()=> '#8da9a0',vLineColor:()=> '#8da9a0',paddingLeft:()=>5,paddingRight:()=>5,paddingTop:()=>6,paddingBottom:()=>6},pageBreak:i?'before':undefined});
+}
  return {...base,content:cards};
 }
 function active(on){for(const name of ['rrPrint','rrShare','rrExport'])$(name).disabled=!on}
