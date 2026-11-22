@@ -48,7 +48,7 @@ public final class IssuerActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);root.setPadding(dp(16),dp(18),dp(16),dp(20));root.setBackgroundColor(0xfff5f8f7);scroll.addView(root);setContentView(scroll);
         TextView title=text("تصاريح رفد",27,GREEN);title.setTypeface(null,Typeface.BOLD);title.setGravity(Gravity.CENTER);root.addView(title);
-        TextView sub=text("لوحة المطور • إصدار 1.0.2",14,INK);sub.setGravity(Gravity.CENTER);root.addView(sub);
+        TextView sub=text("لوحة المطور • إصدار 1.0.3",14,INK);sub.setGravity(Gravity.CENTER);root.addView(sub);
         LinearLayout security=card(root);heading(security,"مفتاح الاستصدار");
         fileStatus=text("جارٍ التحقق من المفتاح المشفر",14,INK);security.addView(fileStatus);
         Button importKey=button(security,"استيراد مفتاح احتياطي",false,()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK);});
@@ -57,7 +57,7 @@ public final class IssuerActivity extends Activity {
         changePassword=button(security,"تغيير كلمة المرور",false,()->changePasswordDialog());changePassword.setEnabled(false);
         lock=button(security,"قفل المفتاح",false,()->lockKey());lock.setEnabled(false);
         state=text("المفتاح مقفل",13,INK);security.addView(state);
-        historyButton=button(root,"سجل التصاريح الصادرة",true,()->showHistory());historyButton.setEnabled(false);
+        historyButton=button(root,"إدارة التصاريح: إيقاف / تعديل / تجديد",true,()->showHistory());historyButton.setEnabled(false);
         LinearLayout form=card(root);heading(form,"استصدار تصريح تشغيل");
         entity=field(form,"اسم الكيان أو المرفق (اختياري)",InputType.TYPE_CLASS_TEXT);
         holder=field(form,"اسم صاحب الجوال (اختياري)",InputType.TYPE_CLASS_TEXT);
@@ -162,7 +162,7 @@ public final class IssuerActivity extends Activity {
         if(key==null||bootstrapPending)throw new SecurityException("Locked");
         JSONArray records=loadHistory();for(int i=0;i<records.length();i++)if(p.getString("id").equals(records.getJSONObject(i).getString("id")))return;
         JSONObject row=new JSONObject(p.toString()).put("token",token).put("recordedAt",System.currentTimeMillis()/1000L);if(parent!=null)row.put("parent",parent);
-        records.put(row);writeHistory(records);
+        records.put(row);if(parent!=null&&!parent.isEmpty()){for(int i=0;i<records.length()-1;i++){JSONObject previous=records.getJSONObject(i);if(parent.equals(previous.optString("id")))previous.put("reissuedAs",p.getString("id"));}}writeHistory(records);
     }
     private JSONObject verifyOldCode(String raw)throws Exception{
         String token=raw.replaceAll("\\s+","");if(token.length()>8192)throw new SecurityException("Invalid token");String[] a=token.split("\\.",-1);if(a.length!=3||!"RFD1".equals(a[0]))throw new SecurityException("Invalid token");
@@ -174,7 +174,13 @@ public final class IssuerActivity extends Activity {
     }
     private String fmt(long seconds){return seconds==0?"دائم":new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date(seconds*1000L));}
     private String roleName(JSONObject p){return "mother".equals(p.optString("role"))?"الجهاز الأم":"موزع";}
-    private String statusName(JSONObject p){long exp=p.optLong("exp");return exp==0||exp>System.currentTimeMillis()/1000L?"ساري بحسب تاريخه":"منتهي";}
+    private String statusName(JSONObject p){
+        if(p.optLong("stoppedAt")>0)return "موقوف إداريًا";
+        long exp=p.optLong("exp");
+        if(exp!=0&&exp<=System.currentTimeMillis()/1000L)return "منتهي";
+        if(p.has("reissuedAs"))return "صدر بديل عنه (الأصل قد يظل صالحًا)";
+        return "ساري بحسب تاريخه";
+    }
     private void copyToken(String token){ClipboardManager cm=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("تصريح رفد",token));toast("تم نسخ الكود");}
     private void shareToken(String token){Intent i=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,token);startActivity(Intent.createChooser(i,"مشاركة تصريح رفد"));}
     private void importOld(){
@@ -189,12 +195,67 @@ public final class IssuerActivity extends Activity {
         long exp=p.optLong("exp");if(exp==0)duration.setSelection(3);else if(exp>System.currentTimeMillis()/1000L){custom.setTimeInMillis(exp*1000L);customSet=true;date.setText(fmt(exp));duration.setSelection(4);}else{duration.setSelection(0);}
         issue.setText("حفظ التعديل وإصدار كود جديد");device.requestFocus();toast("عدّل البيانات أو المدة ثم أصدر كودًا جديدًا");
     }
+    
+    private String signStop(JSONObject p,String reason)throws Exception{
+        if(key==null||bootstrapPending)throw new SecurityException("المفتاح مقفل");
+        long now=System.currentTimeMillis()/1000L;
+        JSONObject notice=new JSONObject().put("v",1).put("app","rafd").put("action","stop")
+           .put("permit",p.getString("id")).put("device",p.getString("device"))
+           .put("iat",now).put("reason",reason);
+        String body="RFR1."+b64(notice.toString().getBytes(StandardCharsets.UTF_8));
+        Signature sign=Signature.getInstance("SHA256withRSA");
+        sign.initSign(key);sign.update(body.getBytes(StandardCharsets.US_ASCII));
+        return body+"."+b64(sign.sign());
+    }
+    private void stopPermit(JSONObject source){
+        if(key==null||bootstrapPending){toast("افتح المفتاح أولًا");return;}
+        if(source.optLong("stoppedAt")>0){toast("التصريح موقوف في سجل المطور");return;}
+        EditText reason=new EditText(this);
+        reason.setHint("سبب الإيقاف (إلزامي)");
+        reason.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        reason.setMaxLines(3);reason.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(300)});
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("إيقاف التصريح")
+           .setMessage("سيُوقف إصداره واستخدامه في سجل المطور، ويُنشأ إشعار إيقاف موقّع. لا يتوقف الجهاز الآخر تلقائيًا دون وصول الإشعار إليه وتطبيقه. لا تُحذف بيانات الجهاز.")
+           .setView(reason).setNegativeButton("إلغاء",null).setPositiveButton("تأكيد الإيقاف",null).create();
+        d.setOnShowListener(ignored->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String why=reason.getText().toString().trim();
+            if(why.isEmpty()){reason.setError("أدخل سبب الإيقاف");return;}
+            try{
+                JSONArray records=loadHistory();JSONObject found=null;
+                for(int i=0;i<records.length();i++){JSONObject item=records.getJSONObject(i);if(source.getString("id").equals(item.optString("id"))){found=item;break;}}
+                if(found==null){toast("التصريح غير موجود في السجل");return;}
+                if(found.optLong("stoppedAt")>0){d.dismiss();showDetails(found);return;}
+                String original=found.getString("token");
+                if(!verifyOldCode(original).getString("id").equals(found.getString("id")))throw new SecurityException("Record mismatch");
+                String stopCode=signStop(found,why);
+                found.put("stoppedAt",System.currentTimeMillis()/1000L).put("stopReason",why).put("stopToken",stopCode);
+                writeHistory(records);
+                d.dismiss();toast("تم تسجيل الإيقاف وتوقيعه");
+                showDetails(found);
+            }catch(Exception e){toast("تعذر اعتماد الإيقاف. لم تتغير حالة التصريح");}
+        }));d.show();
+    }
     private void showDetails(JSONObject p){
         if(key==null||bootstrapPending)return;if(historyDialog!=null)historyDialog.dismiss();
         String token=p.optString("token");LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);l.setPadding(dp(14),dp(8),dp(14),dp(10));
         l.addView(text("الكيان: "+p.optString("entity","")+"\nصاحب الجوال: "+p.optString("holder","")+"\nنوع الجهاز: "+roleName(p)+"\nمعرّف الجهاز: RFD-"+p.optString("device")+"\nتاريخ الإصدار: "+fmt(p.optLong("iat"))+"\nالانتهاء: "+fmt(p.optLong("exp"))+"\nالحالة: "+statusName(p),14,INK));
-        button(l,"نسخ الكود",true,()->copyToken(token));button(l,"مشاركة الكود",false,()->shareToken(token));button(l,"تعديل / تجديد التصريح",false,()->prepareReissue(p));
-        l.addView(text("التعديل يصدر كودًا جديدًا. لا يلغي الكود السابق عن بُعد.",12,INK));
+        if(p.optLong("stoppedAt")>0){
+            l.addView(text("تم الإيقاف إداريًا بتاريخ: "+fmt(p.optLong("stoppedAt"))+
+                "\nالسبب: "+p.optString("stopReason")+
+                "\nمهم: لا يصبح الإيقاف نافذًا على جهاز رفد الآخر إلا بعد وصول إشعار الإيقاف إليه أو تحقق خارجي معتمد.",13,0xff9f2e26));
+            String stopCode=p.optString("stopToken");
+            if(!stopCode.isEmpty()){
+                button(l,"نسخ إشعار الإيقاف الموقّع",true,()->copyToken(stopCode));
+                button(l,"مشاركة إشعار الإيقاف",false,()->shareToken(stopCode));
+            }
+            button(l,"استصدار تصريح بديل بعد الإيقاف",false,()->prepareReissue(p));
+        }else{
+            button(l,"تعديل بيانات التصريح / إصدار بديل",true,()->prepareReissue(p));
+            button(l,"إيقاف التصريح",false,()->{if(historyDialog!=null)historyDialog.dismiss();stopPermit(p);});
+        }
+        button(l,"نسخ كود التصريح الأصلي (للأرشيف)",false,()->copyToken(token));
+        button(l,"مشاركة كود التصريح الأصلي",false,()->shareToken(token));
+        l.addView(text("التعديل أو التجديد يصدر تصريحًا جديدًا موقّعًا، ولا يغيّر الكود السابق أو يلغي صلاحيته آليًا على جهاز آخر.",12,INK));
         historyDialog=new AlertDialog.Builder(this).setTitle("تفاصيل التصريح").setView(l).setNegativeButton("إغلاق",null).setPositiveButton("رجوع للسجل",(d,w)->showHistory()).create();historyDialog.show();
     }
     private void showHistory(){
@@ -206,7 +267,7 @@ public final class IssuerActivity extends Activity {
             Runnable render=()->{rows.removeAllViews();String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);int matches=0;Set<String> parents=new HashSet<>();for(int i=0;i<records.length();i++){JSONObject p=records.optJSONObject(i);if(p!=null&&p.has("parent"))parents.add(p.optString("parent"));}
                 for(int i=records.length()-1;i>=0;i--){JSONObject p=records.optJSONObject(i);if(p==null)continue;String all=(p.optString("entity")+" "+p.optString("holder")+" "+p.optString("device")+" "+roleName(p)).toLowerCase(Locale.ROOT);if(!all.contains(q)&&!all.replace("-","").contains(q.replace("-","").replace("rfd","")))continue;matches++;if(matches>100)continue;
                 String title=p.optString("holder");if(title.isEmpty())title=p.optString("entity");if(title.isEmpty())title="RFD-"+p.optString("device");
-                String note=parents.contains(p.optString("id"))?" • أُعيد إصداره":"";
+                String note=parents.contains(p.optString("id"))?" • صدر بديل":"";
                 Button b=button(rows,title+"\n"+roleName(p)+" • "+fmt(p.optLong("exp"))+" • "+statusName(p)+note,false,()->showDetails(p));b.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);}
                 count.setText("التصاريح: "+matches+(matches>100?" — تظهر أحدث 100 نتيجة؛ ضيّق البحث":""));if(matches==0)rows.addView(text("لا توجد تصاريح مطابقة",14,INK));};
             search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence a,int st,int c,int af){}public void onTextChanged(CharSequence a,int st,int before,int c){render.run();}public void afterTextChanged(Editable e){}});render.run();
