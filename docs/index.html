@@ -640,17 +640,22 @@ function renderBarcodeDelivery(f,container){
  for(const c of data.cycles){bags.append(new Option(c.title+(c.closed?' (مغلقة)':'')+' · '+(c.date||''),c.id))}
  form.append(bags);
  const qtyLabel=document.createElement('label');qtyLabel.textContent='عدد العطايا';form.append(qtyLabel);
- const qty=document.createElement('input');qty.type='number';qty.min='1';qty.step='1';qty.required=true;qty.inputMode='numeric';qty.setAttribute('aria-label','عدد العطايا');form.append(qty);
+ const qty=document.createElement('input');qty.type='number';qty.min='1';qty.step='1';qty.required=true;qty.inputMode='numeric';qty.setAttribute('aria-label','عدد العطايا');qty.setAttribute('lang','en-US');qty.setAttribute('dir','ltr');form.append(qty);
+ const actualLabel=document.createElement('label');actualLabel.textContent='القيمة النقدية / المقابلة الفعلية';form.append(actualLabel);
+ const actual=document.createElement('input');actual.type='number';actual.min='0.01';actual.max='1000000000';actual.step='0.01';actual.inputMode='decimal';actual.setAttribute('lang','en-US');actual.setAttribute('dir','ltr');actual.setAttribute('aria-label','القيمة الفعلية');form.append(actual);
  const note=document.createElement('p');note.className='rafd-scan-delivery-note';note.setAttribute('role','status');form.append(note);
  const approve=document.createElement('button');approve.type='submit';approve.textContent='تأكيد تسليم الحقيبة';form.append(approve);
  function update(){
   const c=lookup(data.cycles,bags.value),r=c?barcodeDeliveryEligibility(c,live):{eligible:false,message:data.cycles.length?'اختر الحقيبة':'لم تُنشأ أي حقيبة عطايا بعد'};
   note.textContent=r.message;approve.disabled=!r.eligible;
   qty.hidden=qtyLabel.hidden=!!r.mother||!c;
-  if(c&&!r.mother){let proposed=0;try{proposed=suggestedAid(c,live)}catch{}qty.value=Number.isSafeInteger(proposed)&&proposed>0?String(proposed):'1'}
+  const valued=!!c&&!r.mother&&bagMoney(c).kind!=='none'&&bagMoney(c).unitMinor>0;
+  actual.hidden=actualLabel.hidden=!valued;actual.required=valued;
+  if(c&&!r.mother){let proposed=0;try{proposed=suggestedAid(c,live)}catch{}qty.value=Number.isSafeInteger(proposed)&&proposed>0?String(proposed):'1';if(valued)actual.value=String((c.unitMinor*Number(qty.value))/100)}
   if(r.mother)approve.textContent='فتح إجراء تسليم الأم';else approve.textContent='تأكيد تسليم الحقيبة';
  }
  bags.addEventListener('change',update);
+ qty.addEventListener('input',()=>{const c=lookup(data.cycles,bags.value);if(c&&bagMoney(c).unitMinor&&validQty(qty.value))actual.value=String(c.unitMinor*Number(qty.value)/100)});
  form.onsubmit=e=>{
   e.preventDefault();
   if(!activeUser||!can('view')||!can('add')||pairRestricted||deviceRole==='distributor')return;
@@ -664,8 +669,11 @@ function renderBarcodeDelivery(f,container){
   if(!quantity)return alert('أدخل عدد عطايا صحيحًا موجبًا');
   let suggested=quantity;try{suggested=suggestedAid(selected,person)}catch{}
   const warn=quantity>suggested?' تنبيه: الكمية أكبر من الاستحقاق المقترح ('+suggested+').':'';
-  if(!confirm('تأكيد تسليم '+quantity+' عطية إلى '+person.name+' من حقيبة '+selected.title+'؟'+warn))return;
-  if(!deliver(selected,person.id,quantity)){update();return alert('تعذر التسليم؛ راجع حالة الحقيبة أو التخصيص أو التسليم السابق')}
+  let amountMinor;
+  try{if(bagMoney(selected).kind!=='none'&&bagMoney(selected).unitMinor>0)amountMinor=moneyMinor(actual.value)}catch(e){actual.setCustomValidity(e.message);actual.reportValidity();actual.setCustomValidity('');return}
+  const financial=amountMinor!=null?' | '+(selected.valueKind==='cash'?'مبلغ نقدي: ':'قيمة عينية مقابلة: ')+moneyText(amountMinor,selected.currency):'';
+  if(!confirm('تأكيد تسليم '+quantity+' عطية إلى '+person.name+' من حقيبة '+selected.title+financial+'؟'+warn))return;
+  if(!deliver(selected,person.id,quantity,amountMinor)){update();return alert('تعذر التسليم؛ راجع حالة الحقيبة أو التخصيص أو التسليم السابق')}
   if(save()){refresh();showScanResult('RFD'+String(person.no).padStart(6,'0'));alert('تم اعتماد تسليم '+quantity+' عطية من '+selected.title+'.')}
  };
  container.append(form);
