@@ -8,7 +8,7 @@ function capture(d,area,issued,identity={}){return {identity:{entity:plain(ident
 const titleOf=s=>s.mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع المساعدات';
 const totalOf=s=>s.rows.reduce((sum,r)=>sum+r.quantity,0);
 const metaRows=s=>[['رقم المستند',s.cycle.docNo,'تاريخ الدورة',s.cycle.date],['مسمى الدورة',s.cycle.title,'المسؤول / المورد',s.cycle.donor],['عدد الأسر',String(s.rows.length),'تاريخ الإصدار',s.issued]];
-const heads=['م','المستفيد','رابط الأسرة/رقم المنزل / المربع / المنطقة','الأفراد','الفئة','الكمية'];
+const heads=['م','المسجل','رابط الأسرة/رقم المنزل / المربع / المنطقة','الأفراد','الفئة','الكمية'];
 const fields=(r,i)=>[String(i+1),r.name,r.home,r.members,r.category,r.quantity?String(r.quantity):'—'];
 const filename=s=>('رفد_كشف_توزيع_المساعدات_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
 function definition(s){

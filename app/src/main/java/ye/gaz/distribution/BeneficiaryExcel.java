@@ -81,8 +81,8 @@ final class BeneficiaryExcel {
             String name=x.getString("name").trim(),house=x.getString("house").trim();check(!name.isEmpty(),"الاسم مطلوب");check(name.length()<=200&&house.length()<=200&&x.getString("square").length()<=80&&x.getString("area").length()<=100&&x.getString("phone").length()<=50&&x.getString("categories").length()<=300&&x.getString("notes").length()<=1000,"إحدى القيم طويلة جدًا");
             int members=boundedNumber(digit(x.getString("members"))).intValueExact();check(members>=1&&members<=1000,"عدد أفراد الأسرة غير صالح");
             String need=x.getString("need").trim();check(need.length()<=200,"نسبة الاحتياج لا تتجاوز 200 حرف");
-            check(names.add(AllocationSelection.norm(name)),"اسم مكرر داخل الملف أو التطبيق");String id=RafdIdentityNumber.normalize(x.optString("identityNo",""));check(id.isEmpty()||ids.add(id),"رقم هوية مكرر داخل الملف أو التطبيق");
-            JSONObject f=new JSONObject();for(String k:KEYS)f.put(k,x.getString(k));f.put("name",name).put("house",house).put("members",members).put("need",need).put("identityNo",id).put("row",row);valid.put(f);
+            String id;try{id=RafdIdentityNumber.normalize(x.optString("identityNo",""));}catch(IllegalArgumentException e){throw new IOException(e.getMessage());}String normalized=AllocationSelection.norm(name);check(!names.contains(normalized),"اسم مكرر داخل الملف أو التطبيق");check(id.isEmpty()||!ids.contains(id),"رقم هوية مكرر داخل الملف أو التطبيق");names.add(normalized);if(!id.isEmpty())ids.add(id);
+            JSONObject f=new JSONObject();for(String k:KEYS)f.put(k,x.optString(k,""));f.put("name",name).put("house",house).put("members",members).put("need",need).put("identityNo",id).put("row",row);valid.put(f);
         }catch(Exception e){String msg=e instanceof IOException?e.getMessage():"عدد أفراد الأسرة غير صالح";errors.put("الصف "+row+": "+msg);}}
         return new JSONObject().put("valid",valid).put("errors",errors);
     }

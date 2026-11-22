@@ -61,7 +61,7 @@ public final class MainActivity extends Activity {
     private void activationScreen(){
         LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(p);p.setBackgroundColor(Color.WHITE);
         TextView title=new TextView(this);title.setText("رفد");title.setTextSize(32);title.setTextColor(Color.rgb(0,94,88));title.setGravity(android.view.Gravity.CENTER);p.addView(title);
-        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.3");
+        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.4");
         pairText(p,"أرسل معرّف الجهاز إلى المطور لطلب التصريح. تظل البيانات محفوظة حتى عند انتهاء التصريح.");
         TextView code=new TextView(this);code.setText(displayPermitDevice());code.setTextIsSelectable(true);code.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);code.setTextSize(17);code.setGravity(android.view.Gravity.CENTER);p.addView(code);
         pairButton(p,"نسخ معرّف الجهاز",()->copyPermitDevice());
@@ -603,7 +603,7 @@ public final class MainActivity extends Activity {
             runOnUiThread(()->{if(!excelAllowed(admin))return;LinearLayout layout=pairLayout();pairText(layout,"عدد الصفوف: "+input.length()+" | صالحة: "+valid.length()+" | تحتاج تصحيح: "+errors.length());
                 for(int j=0;j<errors.length();j++)pairText(layout,errors.optString(j));if(errors.length()==0)for(int j=0;j<valid.length();j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | رابط الأسرة: "+(f.optString("house").isEmpty()?"—":f.optString("house"))+" | مربع "+f.optString("square"));}
                 ScrollView sc=new ScrollView(this);sc.addView(layout);AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle(errors.length()>0?"راجع الملف ثم أعد الاستيراد":"معاينة الاستيراد").setView(sc).setNegativeButton("إغلاق",null);
-                if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مستفيدًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مستفيدًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
+                if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مسجلًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مسجلًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
             });
         }catch(Exception e){String message=e instanceof IOException?e.getMessage():"اختر ملف XLSX مطابقًا للنموذج";runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر الاستيراد").setMessage(message+"\nلم تُضف أي بيانات.").setPositiveButton("إغلاق",null).show());}});
     }
