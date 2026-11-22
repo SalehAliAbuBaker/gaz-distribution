@@ -134,6 +134,7 @@ final class GazStore extends SQLiteOpenHelper {
     private static Map<String,String> flatten(JSONObject state) throws Exception {
         if(state.getString("area").trim().isEmpty()||state.getLong("n")<0)throw new JSONException("Invalid area");
         if(state.has("deploymentId"))id(state,"deploymentId");
+        RafdIdentityNumber.validateUnique(state.getJSONArray("families"));
         Map<String,String> rows=new LinkedHashMap<>();Set<String> family=new HashSet<>(),cycles=new HashSet<>(),numbers=new HashSet<>();
         for(String kind:KINDS){
             JSONArray list=state.getJSONArray(kind);
