@@ -28,7 +28,7 @@ public class GazStoreFamilyImportTest {
         assertEquals(1,saved.getInt("no"));
         Map<String,String> encoded=GazStore.flatten(state);
         assertEquals(2,encoded.size());
-        assertTrue(encoded.values().toString().contains("\\"members\\":null"));
+        assertTrue(encoded.values().toString().contains("\"members\":null"));
     }
     @Test public void imported431UnknownHouseholdsPassFullStoreValidation() throws Exception {
         JSONObject state=emptyStore();
