@@ -6,8 +6,8 @@ android {
         applicationId 'ye.gaz.distribution'
         minSdk 26
         targetSdk 34
-        versionCode 47
-        versionName '1.0.19'
+        versionCode 48
+        versionName '1.0.20'
     }
     sourceSets { main { assets.srcDirs = ['../docs'] } }
     compileOptions {
