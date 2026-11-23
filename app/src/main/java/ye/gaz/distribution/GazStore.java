@@ -197,10 +197,10 @@ final class GazStore extends SQLiteOpenHelper {
                 if(db.insertWithOnConflict("records",null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("Write failed");
             }db.setTransactionSuccessful();committed=true;
         }finally{
-            try{db.endTransaction();}finally{
-                // A wrapping synchronization transaction may later roll back;
-                // commitSync invalidates after its outermost boundary closes.
-                if(committed){decryptedRowsCache=new LinkedHashMap<>(next);stateCache=json;}
+            boolean ended=false;
+            try{db.endTransaction();ended=true;}finally{
+                // Never trust a cache after a failed commit, including outer sync rollbacks.
+                if(committed&&ended){decryptedRowsCache=new LinkedHashMap<>(next);stateCache=json;}
                 else clearReadCache();
             }
         }
