@@ -333,10 +333,10 @@ if(!data)data={n:0,area:'غير محدد',families:[],cycles:[],deliveries:[],de
 if(nativeHost&&!data.deploymentId)data.deploymentId=uid();
 data.users=Array.isArray(data.users)?data.users:[];data.n=Math.max(Number(data.n)||0,...data.families.map(f=>Number(f.no)||0),0);
 let activeUser=null, current='login', ef=null,ec=null,eu=null, chosen=new Set(), quotas={};let familyEditorOpen=false,smartBackTo='home',smartAllCycles=false;
-const save=()=>{try{const json=JSON.stringify(data);if(nativeHost){if(!nativeHost.writeState(json))throw Error('SQLite write failed');}else localStorage.setItem(key,json);return true}catch(e){alert('تعذر الحفظ؛ تحقق من مساحة التخزين والتخصيصات القائمة وعدم تعديل حركة تمت مزامنتها.');location.reload();return false}};
+const save=()=>{try{const json=JSON.stringify(data);if(nativeHost){if(!nativeHost.writeState(json))throw Error(nativeHost.stateSaveError?.()||'تعذر حفظ التغييرات على الجهاز');}else localStorage.setItem(key,json);return true}catch(e){alert('تعذر الحفظ: '+(e?.message||'تحقق من مساحة التخزين والتخصيصات القائمة، وحاول مجددًا')+'. ستُعاد قراءة البيانات المحفوظة دون حذفها.');location.reload();return false}};
 const today=()=>{let d=new Date;return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const lookup=(a,id)=>a.find(x=>x.id===id), can=p=>!!(activeUser&&(activeUser.permissions.admin||activeUser.permissions[p]));
-const motherRegistryOwner=()=>!!(deviceRole==='mother'&&!pairRestricted&&can('admin'));
+const motherRegistryOwner=()=>!!((deviceRole==='mother'||deviceRole==='independent')&&!pairRestricted&&can('admin'));
 const canRegistry=p=>can(p)||motherRegistryOwner();
 const requireRegistry=p=>canRegistry(p)||(alert('لا توجد صلاحية لإدارة المسجل: '+p),false);
 const linkedRegistrant=id=>data.deliveries.some(d=>d.f===id)||motherAllocations.some(a=>a.family===id);
@@ -797,7 +797,7 @@ $('smartBack').onclick=()=>show(smartBackTo);$('smartMoreCycles').onclick=()=>{s
 $('smartQuery').addEventListener('input',renderHomeSearch);
 $('smartClear').onclick=()=>{clearHomeSearch();$('smartQuery').focus();};
 $('smartQuery').addEventListener('keydown',e=>{if(e.key==='Escape'){clearHomeSearch();e.target.blur();}else if(e.key==='Enter'){const first=$('smartResults').querySelector('button');if(first){e.preventDefault();first.click();}}});
-$('smartEdit').onclick=()=>{const f=lookup(data.families,smartSelected);if(!f||!requireRegistry('edit'))return;showArchivedRegistrants=!!f.archived;show('families');$('search').value='';$('categoryFilter').value='';$('squareFilter').value='';const index=sortedFamilies().findIndex(x=>x.id===f.id);familyPage=Math.max(0,Math.floor(index/PAGE_SIZE));familyList();const b=Array.from($('list').querySelectorAll('[data-act="family-edit"]')).find(x=>x.dataset.id===f.id);if(b)b.click();};
+$('smartEdit').onclick=()=>{const f=lookup(data.families,smartSelected);if(!f||!requireRegistry('edit'))return;showArchivedRegistrants=!!f.archived;barcodeFocusId=null;show('families');$('search').value='';$('categoryFilter').value='';$('squareFilter').value='';const index=sortedFamilies().findIndex(x=>x.id===f.id);familyPage=Math.max(0,Math.floor(index/PAGE_SIZE));familyList();const b=Array.from($('list').querySelectorAll('[data-act="family-edit"]')).find(x=>x.dataset.id===f.id);if(b)b.click();};
 $('smartDelete').onclick=()=>{const f=lookup(data.families,smartSelected);deleteRegistrant(f)};
 window.addEventListener('gaz-search-refresh',()=>{homeSearchRows=null;if(current==='home'&&$('smartQuery').value)renderHomeSearch();});
 
