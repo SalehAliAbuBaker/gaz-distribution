@@ -94,3 +94,13 @@ body.gaz-preview-open{overflow:hidden}
   #gazPreviewPaper .gaz-report-table tr{break-inside:avoid;page-break-inside:avoid}
   #gazPreviewPaper .gaz-report-signatures{break-inside:avoid;page-break-inside:avoid}
 }
+/* Statement totals live outside the narrow numbered columns. */
+#gazPreviewPaper .gaz-report-summary{border:1px solid #9baabb;background:#eff5f2;margin:6px 0 16px;break-inside:avoid;page-break-inside:avoid}
+#gazPreviewPaper .gaz-report-summary-row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:7px 12px;font-size:13px;line-height:1.5;direction:rtl}
+#gazPreviewPaper .gaz-report-summary-row + .gaz-report-summary-row{border-top:1px solid #cbd8d3}
+#gazPreviewPaper .gaz-report-summary-row strong{min-width:0;overflow-wrap:normal;word-break:normal;flex:1}
+#gazPreviewPaper .gaz-report-summary-row b{flex:0 0 auto;min-width:58px;text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media print{
+  #gazPreviewPaper .gaz-report-summary{break-inside:avoid;page-break-inside:avoid}
+  #gazPreviewPaper .gaz-report-summary-row{font-size:11px}
+}
