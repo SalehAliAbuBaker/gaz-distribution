@@ -26,7 +26,8 @@ final class SyncRules {
         JSONObject c=find(local.getJSONArray("cycles"),cycle),f=find(local.getJSONArray("families"),family);
         require(c!=null&&f!=null&&!f.optBoolean("archived")&&!c.optBoolean("closed")&&delivery(local,cycle,family)==null,"Unavailable family/cycle");
         String k=key(cycle,family);JSONObject grants=map(state,"grants");require(!grants.has(k),"Already allocated");require(grants.length()<20000,"Test grant limit");
-        JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(AidQuota.forFamily(c,f)))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
+        int grantQty=quantity(Integer.valueOf(AidQuota.forFamily(c,f)));BagInventory.requireAvailable(local,state,cycle,grantQty);
+        JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",grantQty).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
         RafdMoney.checkCycle(c);if(!RafdMoney.kind(c).equals("none")&&RafdMoney.unit(c)>0){p.put("valueKind",RafdMoney.kind(c)).put("currency",RafdMoney.currency(c)).put("unitMinor",RafdMoney.unit(c));}
         String packet=SyncWire.sign(p,secret);grants.put(k,packet);return packet;
     }

@@ -13,7 +13,7 @@ public class SyncRulesTest {
         KeyPair m=key(),a=key(),b=key();String dep=id(),epoch=id(),mother=id(),one=id(),two=id(),cycle=id(),family=id(),other=id(),k=SyncRules.key(cycle,family);
         JSONObject ms=new JSONObject().put("role","mother").put("device",mother).put("deployment",dep).put("epoch",epoch).put("pub",pub(m)).put("devices",new JSONObject().put(one,new JSONObject().put("pub",pub(a)).put("name","A")).put(two,new JSONObject().put("pub",pub(b)).put("name","B")));
         JSONObject as=child(one),bs=child(two);
-        JSONObject local=new JSONObject().put("cycles",new JSONArray().put(new JSONObject().put("id",cycle).put("title","دورة").put("date","2026-11-18").put("quota",2).put("closed",false))).put("families",new JSONArray().put(f(family,1)).put(f(other,2))).put("deliveries",new JSONArray());
+        JSONObject local=new JSONObject().put("cycles",new JSONArray().put(new JSONObject().put("id",cycle).put("title","دورة").put("date","2026-11-18").put("quota",2).put("stockTotal",1000).put("stockWarningAt",0).put("closed",false))).put("families",new JSONArray().put(f(family,1)).put(f(other,2))).put("deliveries",new JSONArray());
         JSONObject f(String id,int no)throws Exception{return new JSONObject().put("id",id).put("name","أسرة").put("house","1").put("no",no);}
         JSONObject child(String id)throws Exception{return new JSONObject().put("role","distributor").put("device",id).put("mother",mother).put("motherPub",pub(m)).put("deployment",dep).put("epoch",epoch);}
         Fixture()throws Exception{}

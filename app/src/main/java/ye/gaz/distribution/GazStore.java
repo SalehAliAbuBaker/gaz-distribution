@@ -61,12 +61,13 @@ final class GazStore extends SQLiteOpenHelper {
     synchronized void writeLocalState(String json)throws Exception{
         JSONObject state=pairRead();String role=state.getString("role");
         if(role.equals("pending")||role.equals("distributor"))throw new IllegalStateException("Distributor data is not provisioned");
-        if(role.equals("mother")){JSONObject next=new JSONObject(json);if(!state.getString("deployment").equals(next.getString("deploymentId"))||!state.getString("area").equals(next.getString("area")))throw new IllegalStateException("Mother neighborhood locked");SyncRules.protectMother(state,new JSONObject(readState()),next);}
+        if(role.equals("mother")){JSONObject next=new JSONObject(json);if(!state.getString("deployment").equals(next.getString("deploymentId"))||!state.getString("area").equals(next.getString("area")))throw new IllegalStateException("Mother neighborhood locked");SyncRules.protectMother(state,new JSONObject(readState()),next);BagInventory.verify(next,state);}
         writeState(json);
     }
     synchronized void commitSync(JSONObject paired,JSONObject local)throws Exception{
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try{
+            if("mother".equals(paired.optString("role",""))){BagInventory.verify(local==null?new JSONObject(readState()):local,paired);}
             if(local!=null)writeState(local.toString());
             pairWrite(paired);db.setTransactionSuccessful();
         }finally{db.endTransaction();}
@@ -170,6 +171,7 @@ final class GazStore extends SQLiteOpenHelper {
                 if(rows.put(key(kind,rid),x.toString())!=null)throw new JSONException("Duplicate record");
             }
         }
+        BagInventory.verify(state,null);
         JSONObject meta=new JSONObject(state.toString());JSONObject order=new JSONObject();for(String kind:KINDS){JSONArray ids=new JSONArray();JSONArray list=state.getJSONArray(kind);for(int i=0;i<list.length();i++){JSONObject x=list.getJSONObject(i);ids.put(kind.equals("deliveries")?id(x,"c")+"/"+id(x,"f"):id(x,"id"));}order.put(kind,ids);meta.remove(kind);}meta.put("__gazOrder",order);
         rows.put(key("meta","state"),meta.toString());return rows;
     }
