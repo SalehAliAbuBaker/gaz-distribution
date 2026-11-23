@@ -16,26 +16,27 @@ function extract(source,start,end){
 }
 // The snapshot and pdfMake document definition must suppress genuinely empty columns.
 const pdfCtx={};
-vm.runInNewContext(extract(pdf,'const plain=','function engine()')+
-  '\nthis.testPdf={definition,visibleColumns,capture};',pdfCtx);
+vm.runInNewContext(extract(pdf,'const OPTION_GROUPS=','function engine()')+
+  '\nthis.testPdf={definition,visibleColumns,capture,defaultOptions};',pdfCtx);
 function sample(n=8,kind='none',categories=''){
  return {identity:{signatures:false},area:'test',issued:'2026-11-23',mode:'done',
    cycle:{title:'حقيبة اختبار',date:'2026-11-23',docNo:'2026-0001',donor:'—',details:'غاز',valueKind:kind,unitMinor:kind==='none'?0:100,currency:'YER',stockTotal:500},
-   rows:Array.from({length:n},(_,i)=>({name:'مستفيد '+i,home:'الحي',members:'غير محدد',
+   rows:Array.from({length:n},(_,i)=>({name:'مستفيد '+i,house:'الحي',square:'المربع',area:'المنطقة',members:'غير محدد',
      category:categories,quantity:1,amountMinor:kind==='none'?null:100,currency:'YER',valueKind:kind}))};
 }
-function pdfTable(s){
- return pdfCtx.testPdf.definition(s).content.find(x=>x.table?.headerRows===1).table;
+function pdfTable(s,o){
+ return pdfCtx.testPdf.definition(s,o).content.find(x=>x.table?.headerRows===1).table;
 }
 let table=pdfTable(sample());
-assert.equal(pdfCtx.testPdf.visibleColumns(sample()).length,5);
-assert.equal(table.widths.length,5);
-assert.ok(table.body.every(row=>row.length===5));
-assert.equal(table.body.at(-1).length,5);
-const withFields=sample(8,'cash','أولوية');
-table=pdfTable(withFields);
+assert.equal(pdfCtx.testPdf.visibleColumns(sample(),pdfCtx.testPdf.defaultOptions()).length,7);
 assert.equal(table.widths.length,7);
 assert.ok(table.body.every(row=>row.length===7));
+assert.equal(table.body.at(-1).length,7);
+const withFields=sample(8,'cash','أولوية');
+const selected={...pdfCtx.testPdf.defaultOptions(),category:true,value:true};
+table=pdfTable(withFields,selected);
+assert.equal(table.widths.length,9);
+assert.ok(table.body.every(row=>row.length===9));
 assert.ok(table.body[0].some(x=>x.text==='الفئة'));
 assert.ok(table.body[0].some(x=>String(x.text).includes('القيمة')));
 // Android HTML report keeps only 50 rows in ordinary view, while full PDF view is complete.
@@ -60,4 +61,4 @@ assert.ok(!fields.statementPaper.innerHTML.includes('أول 50 أسرة'));
 assert.ok(html.includes('<details id="familyMoreTools"'));
 assert.ok(html.includes('<details id="familyFiltersPanel"'));
 assert.ok(html.includes('rafd-inline-tools'));
-console.log('Rafd focus + report tests: conditional PDF columns, 50-row lightweight screen, full print and collapsed controls PASSED');
+console.log('Rafd focus + report tests: selectable PDF columns, 50-row lightweight screen, full print and collapsed controls PASSED');
