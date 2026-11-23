@@ -352,6 +352,8 @@ main .rafd-field:has(.field-autocomplete:focus-within){z-index:10}
   }
   main .rafd-field:not(.rafd-infield-empty) select,
   main .rafd-field:focus-within select {padding-block:9px!important}
+  main .rafd-field.rafd-infield-empty:not(:focus-within) select {color:transparent!important}
+  main .rafd-field.rafd-infield-empty:not(:focus-within) select option {color:var(--rafd-text,#172438)!important}
   main .rafd-field:not(.rafd-infield-empty) textarea,
   main .rafd-field:focus-within textarea {padding-block:10px!important}
   main .rafd-field:not(.rafd-infield-empty) input:focus::placeholder,
