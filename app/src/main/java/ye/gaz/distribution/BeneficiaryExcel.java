@@ -12,7 +12,7 @@ final class BeneficiaryExcel {
     static final String MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     static final String[] HEAD={"الاسم الكامل","رابط الأسرة/رقم المنزل","مربع","المنطقة / الحي","رقم التواصل","عدد أفراد الأسرة","نسبة الاحتياج","التصنيفات","ملاحظات","رقم الهوية"};
     static final String[] KEYS={"name","house","square","area","phone","members","need","categories","notes","identityNo"};
-    static final int LIMIT=100,MAX=8*1024*1024;
+    static final int LIMIT=1000,MAX=8*1024*1024;
     static final String NS="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     static final String REL="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     static final String PKG="http://schemas.openxmlformats.org/package/2006/relationships";
@@ -26,12 +26,12 @@ final class BeneficiaryExcel {
             add(z,"xl/workbook.xml","<workbook xmlns=\""+NS+"\" xmlns:r=\""+REL+"\"><bookViews><workbookView/></bookViews><sheets><sheet name=\"المسجلون\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
             add(z,"xl/_rels/workbook.xml.rels","<Relationships xmlns=\""+PKG+"\"><Relationship Id=\"rId1\" Type=\""+REL+"/worksheet\" Target=\"worksheets/sheet1.xml\"/><Relationship Id=\"rId2\" Type=\""+REL+"/styles\" Target=\"styles.xml\"/></Relationships>");
             add(z,"xl/styles.xml","<styleSheet xmlns=\""+NS+"\"><fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Arial\"/></font><font><b/><sz val=\"11\"/><color rgb=\"FFFFFFFF\"/><name val=\"Arial\"/></font></fonts><fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill><fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF084890\"/><bgColor indexed=\"64\"/></patternFill></fill></fills><borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs><cellXfs count=\"3\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/><xf numFmtId=\"0\" fontId=\"1\" fillId=\"2\" borderId=\"0\" xfId=\"0\" applyFill=\"1\" applyFont=\"1\"/><xf numFmtId=\"49\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/></cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>");
-            StringBuilder s=new StringBuilder("<worksheet xmlns=\""+NS+"\"><dimension ref=\"A1:J101\"/><sheetViews><sheetView rightToLeft=\"1\" workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight=\"21\"/><cols>");int[] w={36,30,15,24,22,20,28,24,36,23};
+            StringBuilder s=new StringBuilder("<worksheet xmlns=\""+NS+"\"><dimension ref=\"A1:J1001\"/><sheetViews><sheetView rightToLeft=\"1\" workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight=\"21\"/><cols>");int[] w={36,30,15,24,22,20,28,24,36,23};
             for(int i=0;i<10;i++)s.append("<col min=\"").append(i+1).append("\" max=\"").append(i+1).append("\" width=\"").append(w[i]).append("\" customWidth=\"1\"/>");
             s.append("</cols><sheetData><row r=\"1\" ht=\"28\" customHeight=\"1\">");
             for(int i=0;i<10;i++)s.append("<c r=\"").append((char)('A'+i)).append("1\" s=\"1\" t=\"inlineStr\"><is><t>").append(xml(HEAD[i])).append("</t></is></c>");
-            s.append("</row>");for(int row=2;row<=101;row++){s.append("<row r=\"").append(row).append("\">");for(int i=0;i<10;i++)s.append("<c r=\"").append((char)('A'+i)).append(row).append("\" s=\"").append(i==5?0:2).append("\"/>");s.append("</row>");}
-            s.append("</sheetData><autoFilter ref=\"A1:J101\"/></worksheet>");add(z,"xl/worksheets/sheet1.xml",s.toString());
+            s.append("</row>");for(int row=2;row<=LIMIT+1;row++){s.append("<row r=\"").append(row).append("\">");for(int i=0;i<10;i++)s.append("<c r=\"").append((char)('A'+i)).append(row).append("\" s=\"").append(i==5?0:2).append("\"/>");s.append("</row>");}
+            s.append("</sheetData><autoFilter ref=\"A1:J1001\"/></worksheet>");add(z,"xl/worksheets/sheet1.xml",s.toString());
         }return bytes.toByteArray();
     }
     static void check(boolean ok,String msg)throws IOException{if(!ok)throw new IOException(msg);}
@@ -70,13 +70,13 @@ final class BeneficiaryExcel {
             }
             if(rn==1){for(int k=0;k<9;k++)check(HEAD[k].equals(vals[k])||(k==1&&"رقم المنزل".equals(vals[k])),"عناوين الأعمدة غير مطابقة للنموذج");check(vals[9].isEmpty()||HEAD[9].equals(vals[9]),"عنوان رقم الهوية غير مطابق");header=true;continue;}
             boolean empty=true;for(String v:vals)if(!v.isEmpty()){empty=false;break;}if(empty)continue;
-            check(header,"لا يوجد رأس النموذج");check(result.length()<LIMIT,"الحد الأقصى 100 مستفيد في الدفعة؛ قسّم الملف");
+            check(header,"لا يوجد رأس النموذج");check(result.length()<LIMIT,"الحد الأقصى 1000 مستفيد في الدفعة؛ قسّم الملف");
             JSONObject item=new JSONObject().put("row",rn);for(int k=0;k<10;k++)item.put(KEYS[k],vals[k]);result.put(item);
         }check(header,"النموذج غير مطابق");check(result.length()>0,"لا توجد أسماء في الملف");return result;
     }
     static JSONObject preview(JSONObject data,JSONArray input)throws Exception{
         JSONArray valid=new JSONArray(),errors=new JSONArray();Set<String> names=new HashSet<>(),ids=new HashSet<>();JSONArray old=data.getJSONArray("families");for(int i=0;i<old.length();i++){JSONObject f=old.getJSONObject(i);names.add(AllocationSelection.norm(f.getString("name")));String id=RafdIdentityNumber.normalize(f.optString("identityNo",""));if(!id.isEmpty())ids.add(id);}
-        check(input.length()<=LIMIT,"الحد 100 مستفيد");
+        check(input.length()<=LIMIT,"الحد 1000 مستفيد");
         for(int i=0;i<input.length();i++){JSONObject x=input.getJSONObject(i);int row=x.getInt("row");try{
             String name=x.getString("name").trim(),house=x.getString("house").trim();check(!name.isEmpty(),"الاسم مطلوب");check(name.length()<=200&&house.length()<=200&&x.getString("square").length()<=80&&x.getString("area").length()<=100&&x.getString("phone").length()<=50&&x.getString("categories").length()<=300&&x.getString("notes").length()<=1000,"إحدى القيم طويلة جدًا");
             int members=boundedNumber(digit(x.getString("members"))).intValueExact();check(members>=1&&members<=1000,"عدد أفراد الأسرة غير صالح");
