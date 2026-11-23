@@ -54,4 +54,38 @@ public class BeneficiaryExcelTest {
         JSONArray rows=new JSONArray().put(row(2,"اسم أول").put("need","شديدة")).put(row(3,"اسم ثان").put("need","٨٠٪")).put(row(4,"اسم ثالث").put("need",""));
         assertEquals(3,BeneficiaryExcel.append(data,rows));JSONArray f=data.getJSONArray("families");assertEquals("شديدة",f.getJSONObject(0).getString("need"));assertEquals("٨٠٪",f.getJSONObject(1).getString("need"));assertEquals("",f.getJSONObject(2).getString("need"));
     }
+    @Test public void blankMembersAndTrackingNotesImport431WithoutFabricatingHouseholdSize()throws Exception{
+        JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",0);
+        JSONArray records=new JSONArray();
+        for(int i=1;i<=431;i++)records.put(row(i+1,"مستفيد تجريبي "+i).put("members","").put("notes",String.valueOf(i)).put("house",""));
+        JSONObject preview=BeneficiaryExcel.preview(data,records);
+        assertEquals(0,preview.getJSONArray("errors").length());
+        assertEquals(431,preview.getJSONArray("valid").length());
+        assertEquals(431,preview.getInt("tracking"));
+        assertEquals(431,preview.getInt("trackingMatches"));
+        assertEquals(1,preview.getLong("firstNo"));
+        assertEquals(431,BeneficiaryExcel.append(data,records));
+        assertEquals(431,data.getJSONArray("families").length());
+        JSONObject first=data.getJSONArray("families").getJSONObject(0),last=data.getJSONArray("families").getJSONObject(430);
+        assertTrue(first.isNull("members"));assertTrue(last.isNull("members"));
+        assertEquals("1",first.getString("notes"));assertEquals("431",last.getString("notes"));
+        assertEquals(1,first.getInt("no"));assertEquals(431,last.getInt("no"));
+    }
+    @Test public void trackingNotesDoNotOverrideExistingRegisterNumbers()throws Exception{
+        JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",20);
+        JSONArray records=new JSONArray().put(row(2,"اسم مستقل").put("notes","1").put("members",""));
+        JSONObject preview=BeneficiaryExcel.preview(data,records);
+        assertEquals(1,preview.getInt("tracking"));assertEquals(0,preview.getInt("trackingMatches"));
+        assertEquals(21,preview.getLong("firstNo"));
+        BeneficiaryExcel.append(data,records);
+        JSONObject imported=data.getJSONArray("families").getJSONObject(0);
+        assertEquals(21,imported.getInt("no"));assertEquals("1",imported.getString("notes"));
+    }
+    @Test public void invalidKnownHouseholdSizeStillFails()throws Exception{
+        JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",0);
+        for(String invalid:new String[]{"0","-1","1.5","غير محدد","1001"}){
+            JSONArray records=new JSONArray().put(row(2,"اسم مستقل").put("members",invalid));
+            assertEquals(1,BeneficiaryExcel.preview(data,records).getJSONArray("errors").length());
+        }
+    }
 }
