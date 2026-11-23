@@ -98,7 +98,7 @@ function visibleColumns(s,o){
 function columnWidths(cols){
  // A4 portrait inner width is about 545 pt. Scale, never crop an optional field.
  const sum=cols.reduce((n,c)=>n+c.weight,0);
- return cols.map(c=>Math.round(c.weight*Math.min(1,544/sum)*10)/10);
+ const available=546-cols.length*6;return cols.map(c=>Math.round(c.weight*Math.min(1,available/sum)*10)/10);
 }
 
 const filename=s=>('رفد_كشف_توزيع_المساعدات_'+s.cycle.docNo+'_'+s.cycle.title).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,160)+'.pdf';
@@ -173,9 +173,9 @@ function renderReportPaper(s,o){
  const metaRows=[];for(let i=0;i<meta.length;i+=2){const a=meta[i],b=meta[i+1];metaRows.push('<tr><th>'+esc(a[0])+'</th><td>'+esc(a[1])+'</td>'+(b?'<th>'+esc(b[0])+'</th><td>'+esc(b[1])+'</td>':'<th></th><td></td>')+'</tr>')}
  const sign=k=>'<div><strong>'+esc(s.identity[k+'Role'])+'</strong><p>الاسم: '+esc(s.identity[k+'Name']||'................................')+'</p><p>التوقيع: ................................</p></div>';
  const entity=s.identity;
- paper.innerHTML='<header class="gaz-report-header">'+(o.basmala?'<div class="gaz-report-basmala">بسم الله الرحمن الرحيم</div>':'')+
+ paper.innerHTML='<div class="gaz-report-header">'+(o.basmala?'<div class="gaz-report-basmala">بسم الله الرحمن الرحيم</div>':'')+
  (o.entity?'<div class="gaz-report-identity"><div><strong>'+esc(entity.entity)+'</strong><small>'+esc(entity.letterhead)+'</small></div><small>'+esc(entity.address)+'</small></div>':'')+
- '<h1>'+esc(titleOf(s))+'</h1></header>'+
+ '<h1>'+esc(titleOf(s))+'</h1></div>'+
  (metaRows.length?'<table class="gaz-report-meta"><tbody>'+metaRows.join('')+'</tbody></table>':'')+
  '<table class="gaz-report-table"><thead><tr>'+cols.map(c=>'<th>'+esc(c.title)+'</th>').join('')+'</tr></thead><tbody>'+(tableRows||'<tr><td colspan="'+cols.length+'">لا توجد أسر مطابقة</td></tr>')+sum+moneyRows+'</tbody></table>'+
  (o.signatures?'<div class="gaz-report-signatures">'+sign('prepared')+sign('approved')+'</div>':'')+
@@ -223,8 +223,6 @@ function openPreview(intent='preview'){
  document.getElementById('rafdNav').inert=true;
  id('gazPreviewTitle').textContent='معاينة — '+titleOf(snapshot);
  status.textContent='جارٍ تجهيز ملف PDF…';controls(false);prepared=null;
- renderReportPaper(snapshot,options);
- paintOptions();
  try{history.pushState({...history.state,gazDocumentPreview:true},'');historyOwned=true}catch{}
  requestAnimationFrame(()=>{if(opened)fit()});document.fonts.ready.then(()=>{if(opened)zoom(scale)});
  id(intent==='print'?'gazPreviewPrint':intent==='share'?'gazPreviewShare':intent==='export'?'gazPreviewMore':'gazPreviewClose').focus({preventScroll:true});
