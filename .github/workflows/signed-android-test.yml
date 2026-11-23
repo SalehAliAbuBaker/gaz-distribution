@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'releases/1.0.11.request'
+      - 'releases/1.0.12.request'
 permissions:
   contents: read
 concurrency:
@@ -49,19 +49,19 @@ jobs:
           bt="$ANDROID_HOME/build-tools/34.0.0"
           apk="app/build/outputs/apk/release/app-release-unsigned.apk"
           "$bt/zipalign" -c 4 "$apk"
-          "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias gaz --ks-pass env:GAZ_KEYSTORE_PASSWORD --key-pass env:GAZ_KEYSTORE_PASSWORD --out Rafd-1.0.11.apk "$apk"
-          "$bt/apksigner" verify --print-certs Rafd-1.0.11.apk > cert.txt
+          "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias gaz --ks-pass env:GAZ_KEYSTORE_PASSWORD --key-pass env:GAZ_KEYSTORE_PASSWORD --out Rafd-1.0.12.apk "$apk"
+          "$bt/apksigner" verify --print-certs Rafd-1.0.12.apk > cert.txt
           actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' cert.txt | tr '[:upper:]' '[:lower:]')"
           expected="$(printf '%s' "$GAZ_SIGNER_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
           test "${#actual}" = 64 && test "$actual" = "$expected" || { echo "Signer differs from pinned fingerprint"; exit 1; }
-          "$bt/aapt" dump badging Rafd-1.0.11.apk > badging.txt
+          "$bt/aapt" dump badging Rafd-1.0.12.apk > badging.txt
           grep -F "package: name='ye.gaz.distribution'" badging.txt
-          grep -F "versionName='1.0.11'" badging.txt
+          grep -F "versionName='1.0.12'" badging.txt
           if grep -q 'application-debuggable' badging.txt; then echo "Release APK must not be debuggable"; exit 1; fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Rafd-1.0.11-signed
-          path: Rafd-1.0.11.apk
+          name: Rafd-1.0.12-signed
+          path: Rafd-1.0.12.apk
           if-no-files-found: error
   publish:
     needs: signed
@@ -74,10 +74,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Rafd-1.0.11-signed
+          name: Rafd-1.0.12-signed
       - name: Publish signed Android release
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view v1.0.11 >/dev/null 2>&1; then echo "Existing signed release is immutable"; exit 1; fi
-          gh release create v1.0.11 Rafd-1.0.11.apk --target "$GITHUB_SHA" --title "Rafd 1.0.11" --notes "إصدار رفد 1.0.11: رفع استيراد Excel إلى 1000 سجل وتحديث النموذج والمعاينة مع منع التكرار. تحديث للنسخ ذات التوقيع نفسه فقط؛ احفظ نسخة احتياطية قبل التثبيت. اختبار ميداني مطلوب."
+          if gh release view v1.0.12 >/dev/null 2>&1; then echo "Existing signed release is immutable"; exit 1; fi
+          gh release create v1.0.12 Rafd-1.0.12.apk --target "$GITHUB_SHA" --title "Rafd 1.0.12" --notes "إصدار رفد 1.0.12: السماح باستيراد المستفيد دون عدد أفراد الأسرة مع الحفاظ على أرقام الملاحظات ومراقبة الترقيم التلقائي، وتعليق الاستحقاق المرتبط بعدد الأفراد. تحديث للنسخ ذات التوقيع نفسه فقط؛ احفظ نسخة احتياطية قبل التثبيت. اختبار ميداني مطلوب."
