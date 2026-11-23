@@ -320,7 +320,7 @@ public final class MainActivity extends Activity {
                 public long getItemId(int i){return i;}
                 public android.view.View getView(int pos,android.view.View reused,android.view.ViewGroup parent){
                     CheckedTextView v=reused instanceof CheckedTextView?(CheckedTextView)reused:(CheckedTextView)getLayoutInflater().inflate(android.R.layout.simple_list_item_multiple_choice,parent,false);
-                    JSONObject f=visible.get(pos);v.setText(AllocationSelection.label(f)+" | الاستحقاق: "+AidQuota.forFamily(c,f));v.setChecked(selection.checked(f.optString("id")));v.setTextSize(15);v.setSingleLine(false);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);return v;
+                    JSONObject f=visible.get(pos);v.setText(AllocationSelection.label(f)+" | الاستحقاق: "+(AidQuota.needsMembers(c,f)?"معلّق حتى تحديد عدد أفراد الأسرة":String.valueOf(AidQuota.forFamily(c,f))));v.setChecked(selection.checked(f.optString("id")));v.setTextSize(15);v.setSingleLine(false);v.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);return v;
                 }
             };
             list.setAdapter(adapter);
@@ -657,9 +657,11 @@ public final class MainActivity extends Activity {
             byte[] raw;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("لا يمكن قراءة الملف");ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(b.size()+n>BeneficiaryExcel.MAX)throw new IOException("حجم الملف كبير");b.write(buf,0,n);}raw=b.toByteArray();}
             JSONArray input=BeneficiaryExcel.read(raw);JSONObject p=store.importPreview(admin,input);JSONArray valid=p.getJSONArray("valid"),errors=p.getJSONArray("errors");
             runOnUiThread(()->{if(!excelAllowed(admin))return;LinearLayout layout=pairLayout();pairText(layout,"عدد الصفوف: "+input.length()+" | صالحة: "+valid.length()+" | تحتاج تصحيح: "+errors.length());
+                int tracking=p.optInt("tracking",0),matches=p.optInt("trackingMatches",0);long firstNo=p.optLong("firstNo",1);
+                if(tracking>0)pairText(layout,"مطابقة أرقام المتابعة المحفوظة في الملاحظات مع ترقيم السجل التلقائي: "+matches+" من "+tracking+(matches==tracking?" (متطابقة)":" (توجد فروق؛ لن تُستخدم أرقام الملاحظات كأرقام سجلات)"));
                 for(int j=0;j<Math.min(errors.length(),40);j++)pairText(layout,errors.optString(j));
                 if(errors.length()>40)pairText(layout,"توجد "+(errors.length()-40)+" ملاحظات إضافية؛ صحّح الملف وأعد الاستيراد.");
-                if(errors.length()==0){for(int j=0;j<Math.min(valid.length(),40);j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | رابط الأسرة: "+(f.optString("house").isEmpty()?"—":f.optString("house"))+" | مربع "+f.optString("square"));}
+                if(errors.length()==0){for(int j=0;j<Math.min(valid.length(),40);j++){JSONObject f=valid.optJSONObject(j);pairText(layout,"رقم السجل المتوقع: "+(firstNo+j)+" | رقم المتابعة في الملاحظات: "+(f.optString("notes","").isEmpty()?"—":f.optString("notes"))+" | "+f.optString("name")+" | أفراد الأسرة: "+(f.isNull("members")?"غير محدد":f.optString("members"))+" | مربع "+f.optString("square"));}
                     if(valid.length()>40)pairText(layout,"تُعرض أول 40 نتيجة فقط لضمان سرعة المعاينة، وسيتم اعتماد جميع السجلات الصحيحة وعددها "+valid.length()+".");}
                 ScrollView sc=new ScrollView(this);sc.addView(layout);AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle(errors.length()>0?"راجع الملف ثم أعد الاستيراد":"معاينة الاستيراد").setView(sc).setNegativeButton("إغلاق",null);
                 if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مسجلًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مسجلًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
