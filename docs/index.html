@@ -437,7 +437,14 @@ function familyList(){
 }
 
 function cycleList(){$('cycleList').innerHTML=data.cycles.map(c=>'<div class="row"><div><b>'+esc(c.title)+'</b><small>'+esc(c.docNo||'-')+' | '+esc(c.date)+' | '+esc(c.donor||'-')+' | '+moneyLabel(c)+(c.unitMinor?' | '+moneyText(c.unitMinor,c.currency):'')+' | '+(c.closed?'مغلقة':'مفتوحة')+'</small></div><div class="actions">'+btn('تعديل','cycle-edit',c.id,'','edit')+btn(c.closed?'إعادة فتح':'إغلاق','cycle-close',c.id,'muted','edit')+btn('حذف','cycle-delete',c.id,'danger','delete')+btn('كشف','cycle-statement',c.id,'','reports')+'</div></div>').join('')||'لا توجد دورات'}
-function visibleDist(){let c=cycleFor('distCycle'),status=$('distStatus').value;return c?matching($('distSearch').value,$('distCategory').value,$('distSquare').value).filter(f=>status==='all'||(status==='done')===!!findD(c.id,f.id)):[]}
+function visibleDist(){
+ const c=cycleFor('distCycle'),status=$('distStatus').value;
+ if(!c)return [];
+ const matches=matching($('distSearch').value,$('distCategory').value,$('distSquare').value);
+ if(status==='all')return matches;
+ const delivered=new Set(data.deliveries.filter(d=>d.c===c.id).map(d=>d.f));
+ return matches.filter(f=>(status==='done')===delivered.has(f.id));
+}
 function distControls(c,f){
  if(needsMembers(c,f))return '<span class="muted">يُستكمل عدد أفراد الأسرة قبل الاستحقاق</span>';
  const id=esc(f.id);
@@ -549,7 +556,15 @@ $('clearSelected').onclick=()=>{chosen.clear();dist()};
 $('bulkDeliver').onclick=()=>{if(!requireP('add'))return;let c=cycleFor('distCycle');if(!c||c.closed)return;let rows=[...chosen].filter(f=>lookup(data.families,f)&&!findD(c.id,f)&&(!allocated(c.id,f)||(deviceRole==='mother'&&can('admin')&&allocated(c.id,f).managed)));if(!rows.length)return alert('حدد الأسر أولًا');if(rows.some(id=>needsMembers(c,lookup(data.families,id))))return alert('أكمل عدد أفراد الأسرة قبل اعتماد استحقاق مرتبط بعدد الأفراد');if(rows.some(f=>!validQty(qtyForFamily(c,f))))return alert('تحقق من الكميات');if(deviceRole==='mother'&&can('admin')&&rows.some(f=>allocated(c.id,f))){nativeHost.motherDeliveryBatch(activeUser.id,c.id,'add',JSON.stringify(Object.fromEntries(rows.map(f=>[f,Number(qtyForFamily(c,f))]))));return;}if(!confirm('تأكيد تسليم '+rows.length+' أسرة؟'))return;rows.forEach(f=>deliver(c,f,qtyForFamily(c,f)));chosen.clear();save();refresh()};
 $('distList').onchange=e=>{let t=e.target;if(t.dataset.pick){t.checked?chosen.add(t.dataset.pick):chosen.delete(t.dataset.pick);$('selectionSummary').textContent=chosen.size+' محدد'}};
 $('distList').oninput=e=>{if(e.target.dataset.quota)quotas[e.target.dataset.quota]=e.target.value};
-function rowsFor(c,mode){return data.families.filter(f=>!f.archived||((mode==='all'||mode==='done')&&!!findD(c.id,f.id))).map(f=>({f,d:findD(c.id,f.id)})).filter(r=>mode==='all'||(mode==='done')===!!r.d).sort((a,b)=>a.f.name.localeCompare(b.f.name,'ar'))}
+function rowsFor(c,mode){
+ // One lookup table per requested cycle avoids rescanning every delivery for every family.
+ const delivered=new Map();
+ for(const d of data.deliveries)if(d.c===c.id)delivered.set(d.f,d);
+ return data.families.filter(f=>!f.archived||((mode==='all'||mode==='done')&&delivered.has(f.id)))
+   .map(f=>({f,d:delivered.get(f.id)}))
+   .filter(r=>mode==='all'||(mode==='done')===!!r.d)
+   .sort((a,b)=>a.f.name.localeCompare(b.f.name,'ar'));
+}
 function printIdentity(){const v=data?.printIdentity||{};const str=(x,n)=>typeof x==='string'?x.trim().slice(0,n):'';return {entity:str(v.entity,120),letterhead:str(v.letterhead,240),address:str(v.address,240),signatures:v.signatures!==false,preparedRole:str(v.preparedRole,60)||'إعداد المختص',preparedName:str(v.preparedName,100),approvedRole:str(v.approvedRole,60)||'اعتماد المسؤول',approvedName:str(v.approvedName,100)}}
 function identitySnapshot(){return {...printIdentity(),signatures:$('statementSignatures').checked}}
 function loadPrintIdentity(){const p=printIdentity();for(const [id,k] of [['entityName','entity'],['letterhead','letterhead'],['entityAddress','address'],['preparedRole','preparedRole'],['preparedName','preparedName'],['approvedRole','approvedRole'],['approvedName','approvedName']])$(id).value=p[k];$('defaultSignatures').checked=p.signatures;$('statementSignatures').checked=p.signatures}
@@ -595,7 +610,8 @@ $('clearStatement').onclick=()=>{if(!requireP('delete'))return;let c=cycleFor('p
 function reports(){
  if(!can('reports')){$('report').textContent='';return}
  const c=cycleFor('reportCycle');if(!c){$('report').textContent='اختر حقيبة';return}
- const rows=rowsFor(c,'done').filter(r=>matching($('reportSearch').value,'','',null).some(f=>f.id===r.f.id));
+ const reportIds=new Set(matching($('reportSearch').value,'','',null).map(f=>f.id));
+ const rows=rowsFor(c,'done').filter(r=>reportIds.has(r.f.id));
  $('report').innerHTML='<p>الأسر المستلمة: '+rows.length+' | العطايا: '+rows.reduce((n,r)=>n+r.d.q,0)+'</p>'+
  '<p><strong>القيمة الفعلية: '+esc(financialTotal(rows))+'</strong></p>'+
  rows.map(r=>'<div class="row"><div>'+esc(r.f.name)+' | مربع: '+esc(r.f.square||'—')+' | العطايا: '+r.d.q+
@@ -816,7 +832,51 @@ function renderDistributorHome(){
  const icons={users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',deliver:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M8 13l3 3 5-6"/>',history:'<path d="M3 12a9 9 0 1 1 2.6 6.4M3 4v8h8M12 7v5l4 2"/>',reports:'<path d="M3 3v18h18M7 16v-5M12 16V6M17 16v-8"/>',sync:'<path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h3v3h3v3h-6zM12 5v4M5 12h5M15 12h6M12 15v6"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/><circle cx="12" cy="12" r="8"/>'};
  for(const [action,ico,label] of tiles){if(action!=='settings'&&!activeUser.permissions[action])continue;const b=document.createElement('button');b.className='tile';b.type='button';b.setAttribute('aria-label',label);b.innerHTML='<svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="margin:auto">'+icons[ico]+'</svg><span>'+label+'</span>';b.onclick=()=>nativeHost.distributorAction(action);grid.append(b);}
 }
-function refresh(){if(!activeUser)return;homeSearchRows=null;renderHomeSearch();motherAllocations=allocationRows();if(deviceRole==='distributor'){renderDistributorHome();return;}if(pairRestricted){$('sessionName').textContent=activeUser.username+' · جهاز فرعي';$('dash').textContent=deviceRole==='distributor'?'استخدم توزيع الأسر المخصصة والمزامنة مع الجوال الأم':'بانتظار الاقتران — الصرف مقفل';document.querySelectorAll('#home [data-go]').forEach(b=>b.hidden=b.dataset.go!=='settings'||!can('admin'));return;} $('sessionName').textContent=activeUser.username+' · '+(can('admin')?'مدير':'مستخدم');$('dash').textContent=can('view')?(printIdentity().entity?printIdentity().entity+' | ':'')+'المسجلون: '+data.families.filter(f=>!f.archived).length+' | الحقائب: '+data.cycles.length:'بدون صلاحية الاطلاع';if(!can('view')){['list','cycleList','distList','statementPaper','report'].forEach(id=>$(id).textContent='');document.querySelectorAll('#home [data-go]').forEach(b=>{b.hidden=b.dataset.perm!=='admin'||!can('admin')});applyPermissions();return}document.querySelectorAll('#home [data-go]').forEach(b=>b.hidden=false);$('num').value=ef?(lookup(data.families,ef)?.no||''):data.n+1;$('area').value=data.area==='غير محدد'?'':data.area;catOptions('categoryFilter');catOptions('distCategory');squareOptions('squareFilter');squareOptions('distSquare');familyList();cycleList();['distCycle','printCycle','reportCycle'].forEach(opt);dist();printRows();reports();users();applyPermissions()}
+function refresh(){
+ if(!activeUser)return;
+ // Only draw the visible page. Rebuilding hidden print tables and every registry
+ // on each navigation made WebView sluggish after several hundred imports.
+ if(deviceRole==='distributor'){
+   if(current==='home'){homeSearchRows=null;renderHomeSearch();renderDistributorHome();}
+   return;
+ }
+ if(pairRestricted){
+   if(current==='home'){
+     $('sessionName').textContent=activeUser.username+' · جهاز فرعي';
+     $('dash').textContent='بانتظار الاقتران — الصرف مقفل';
+     document.querySelectorAll('#home [data-go]').forEach(b=>b.hidden=b.dataset.go!=='settings'||!can('admin'));
+   }
+   return;
+ }
+ if(current==='home'){
+   homeSearchRows=null;renderHomeSearch();
+   $('sessionName').textContent=activeUser.username+' · '+(can('admin')?'مدير':'مستخدم');
+   $('dash').textContent=can('view')?(printIdentity().entity?printIdentity().entity+' | ':'')+
+       'المسجلون: '+data.families.filter(f=>!f.archived).length+
+       ' | الحقائب: '+data.cycles.length:'بدون صلاحية الاطلاع';
+   document.querySelectorAll('#home [data-go]').forEach(b=>b.hidden=!can('view')&&!(b.dataset.perm==='admin'&&can('admin')));
+ }
+ if(!can('view')){
+   if(current==='permissions')users();
+   else if(current==='home')for(const id of ['list','cycleList','distList','statementPaper','report'])$(id).textContent='';
+   applyPermissions();return;
+ }
+ switch(current){
+   case 'families':
+     $('num').value=ef?(lookup(data.families,ef)?.no||''):data.n+1;
+     catOptions('categoryFilter');squareOptions('squareFilter');familyList();break;
+   case 'cycles':cycleList();break;
+   case 'distribution':
+     motherAllocations=allocationRows();
+     catOptions('distCategory');squareOptions('distSquare');opt('distCycle');dist();break;
+   case 'prints':opt('printCycle');printRows();break;
+   case 'reports':opt('reportCycle');reports();break;
+   case 'permissions':users();break;
+   case 'smartFamily':motherAllocations=allocationRows();break;
+   case 'settings':$('area').value=data.area==='غير محدد'?'':data.area;break;
+ }
+ applyPermissions();
+}
 document.addEventListener('click',e=>{let b=e.target.closest('[data-act]');if(!b||!activeUser)return;let a=b.dataset.act,id=b.dataset.id, f=lookup(data.families,id),c;
 if(a==='registry-card'&&f&&can('reports')&&can('view')){window.RafdRegistryPrint?.('cards',f.id);return;}
 if(a==='family-open'&&f&&can('view')){smartBackTo='families';smartSelected=f.id;smartAllCycles=false;show('smartFamily');return;}
