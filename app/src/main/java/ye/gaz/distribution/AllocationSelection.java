@@ -14,7 +14,7 @@ final class AllocationSelection {
         for(int i=0;i<movements.length();i++){JSONObject d=movements.getJSONObject(i);if(cycle.equals(d.getString("c")))delivered.add(d.getString("f"));}
         JSONArray all=local.getJSONArray("families");
         for(int i=0;i<all.length();i++){JSONObject f=all.getJSONObject(i);String id=f.getString("id");
-            if(!grants.has(SyncRules.key(cycle,id))&&!delivered.contains(id)&&eligible.add(id))available.add(f);
+            if(!grants.has(SyncRules.key(cycle,id))&&!delivered.contains(id)){available.add(f);if(!AidQuota.needsMembers(c,f))eligible.add(id);}
         }
         available.sort(Comparator.comparingInt(f->f.optInt("no")));
     }

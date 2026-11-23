@@ -21,4 +21,16 @@ public class AllocationSelectionTest{
         model.setAll(model.visible("","1"),false);assertEquals(java.util.List.of(e),model.ids());
         model.setAll(model.visible("",null),true);assertEquals(3,model.count());model.clear();assertEquals(0,model.count());
     }
+    @Test public void tieredAllocationListsUnknownFamilyButCannotSelectIt()throws Exception{
+        String cycle=id(),a=id(),b=id();
+        JSONObject c=new JSONObject().put("id",cycle).put("closed",false).put("quota",1).put("aidTwoAbove","5").put("aidThreeAbove","9");
+        JSONObject known=family(a,1,"1").put("members",6),unknown=family(b,2,"1").put("members",JSONObject.NULL);
+        JSONObject local=new JSONObject().put("cycles",new JSONArray().put(c))
+            .put("families",new JSONArray().put(known).put(unknown)).put("deliveries",new JSONArray());
+        AllocationSelection model=new AllocationSelection(local,new JSONObject(),cycle);
+        assertEquals(2,model.total());assertEquals(2,model.visible("","1").size());
+        model.setAll(model.visible("","1"),true);assertEquals(1,model.count());
+        assertEquals(java.util.List.of(a),model.ids());
+        model.set(b,true);assertFalse(model.checked(b));
+    }
 }
