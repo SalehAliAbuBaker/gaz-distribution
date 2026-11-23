@@ -41,6 +41,7 @@ public class BagInventoryTest {
     }
     @Test public void oldBagsRemainReadableButNewGrantsNeedConfiguredTotal()throws Exception{
         SyncRulesTest.Fixture f=new SyncRulesTest.Fixture();
+        f.local.getJSONArray("cycles").getJSONObject(0).remove("stockTotal");
         BagInventory.verify(f.local,f.ms);
         assertNull(BagInventory.limit(f.local.getJSONArray("cycles").getJSONObject(0)));
         assertThrows(IllegalStateException.class,()->f.grant());
