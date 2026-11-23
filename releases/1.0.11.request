@@ -1,0 +1,6 @@
+Authorized production release request for Rafd 1.0.11.
+Source merged: f36bd5208e69395d80ceec84bf61a2603f174d8b
+Changes: import up to 1000 beneficiary rows per XLSX file, expanded template, bounded preview, duplicate and overflow checks.
+Run unit tests and release build; sign only using the permanent owner certificate with pinned SHA-256 fingerprint.
+Fail closed if signing secrets are unavailable; do not publish a debug APK as an official update.
+Preserve application ID and database compatibility.
