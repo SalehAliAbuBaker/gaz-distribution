@@ -23,7 +23,7 @@ function stamp(name){return ()=>{calls.push(name);};}
 const ctx={
     activeUser:{username:'admin'},current:'home',deviceRole:'independent',pairRestricted:false,
     data:{families:[{id:'a',no:1,name:'أحمد'}],cycles:[],deliveries:[],n:1,area:'غير محدد'},
-    homeSearchRows:null,motherAllocations:[],
+    homeSearchRows:null,motherAllocations:[],ef:null,
     document:{querySelectorAll:()=>[]},
     $:id=>fields[id]??(fields[id]={textContent:'',value:'',hidden:false}),
     can:()=>true,printIdentity:()=>({entity:''}),lookup:()=>null,
