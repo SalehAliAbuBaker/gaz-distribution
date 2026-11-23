@@ -30,6 +30,20 @@ public class BeneficiaryExcelTest {
         assertTrue(sheet.contains("<row r=\"1001\">"));
         assertTrue(sheet.contains("<autoFilter ref=\"A1:J1001\"/>"));
     }
+    @Test public void thousandRowsStillEnforceIdentityAndNameUniqueness()throws Exception{
+        JSONObject data=new JSONObject().put("n",0).put("families",new JSONArray());
+        JSONArray rows=new JSONArray();
+        for(int i=0;i<1000;i++)rows.put(row(i+2,"مستفيد "+i).put("identityNo",String.valueOf(200000+i)));
+        rows.getJSONObject(999).put("identityNo","٢٠٠٠٠٠");
+        JSONObject preview=BeneficiaryExcel.preview(data,rows);
+        assertEquals(999,preview.getJSONArray("valid").length());
+        assertEquals(1,preview.getJSONArray("errors").length());
+        assertThrows(Exception.class,()->BeneficiaryExcel.append(data,rows));
+        assertEquals(0,data.getJSONArray("families").length());
+        JSONArray overflow=new JSONArray();
+        for(int i=0;i<1001;i++)overflow.put(row(i+2,"مستفيد "+i));
+        assertThrows(Exception.class,()->BeneficiaryExcel.preview(data,overflow));
+    }
     @Test public void familyLinkOptionalAndText()throws Exception{
         JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",0);
         JSONArray rows=new JSONArray().put(row(2,"اسم أول").put("house","")).put(row(3,"اسم ثان").put("house","أسرة آل سالم"));
