@@ -61,7 +61,7 @@ public final class MainActivity extends Activity {
     private void activationScreen(){
         LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(p);p.setBackgroundColor(Color.WHITE);
         TextView title=new TextView(this);title.setText("رفد");title.setTextSize(32);title.setTextColor(Color.rgb(0,94,88));title.setGravity(android.view.Gravity.CENTER);p.addView(title);
-        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.14");
+        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.15");
         pairText(p,"أرسل معرّف الجهاز إلى المطور لطلب التصريح. تظل البيانات محفوظة حتى عند انتهاء التصريح.");
         TextView code=new TextView(this);code.setText(displayPermitDevice());code.setTextIsSelectable(true);code.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);code.setTextSize(17);code.setGravity(android.view.Gravity.CENTER);p.addView(code);
         pairButton(p,"نسخ معرّف الجهاز",()->copyPermitDevice());
@@ -340,7 +340,7 @@ public final class MainActivity extends Activity {
                 new AlertDialog.Builder(this).setTitle("تأكيد تخصيص "+ids.size()+" أسرة؟").setMessage("الموزع: "+childName+"\nالحقيبة: "+c.optString("title")+"\nسيتم حجز الأسر المحددة حصريًا لهذا الموزع. تشمل العملية أي أسر حددتها في مربعات أو نتائج بحث سابقة.").setNegativeButton("رجوع",null).setPositiveButton("تأكيد",(x,y)->{
                     if(!adminAllowed(admin))return;
                     ProgressDialog busy=ProgressDialog.show(this,"التخصيص","جارٍ حفظ التخصيصات…",true,false);
-                    workers.execute(()->{try{synchronized(store){if(!store.admin(admin))throw new SecurityException("Admin required");pairing.allocate(child,cycle,ids);}runOnUiThread(()->{busy.dismiss();dlg.dismiss();notifyPairChange();msg("تم تخصيص "+ids.size()+" أسرة؛ بانتظار المزامنة");});}catch(Exception e){runOnUiThread(()->{busy.dismiss();msg("تعذر التخصيص؛ قد تكون إحدى الأسر حُجزت أو استلمت بالفعل. لم تُعتمد دفعة جزئية.");});}});
+                    workers.execute(()->{try{synchronized(store){if(!store.admin(admin))throw new SecurityException("Admin required");pairing.allocate(child,cycle,ids);}runOnUiThread(()->{busy.dismiss();dlg.dismiss();notifyPairChange();msg("تم تخصيص "+ids.size()+" أسرة؛ بانتظار المزامنة");});}catch(Exception e){runOnUiThread(()->{busy.dismiss();msg("تعذر التخصيص؛ تحقق من رصيد الحقيبة أو من تكرار الحجز أو التسليم. لم تُعتمد دفعة جزئية.");});}});
                 }).show();
             }));dlg.show();dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         }catch(Exception e){msg("تعذر فتح قائمة الأسر");}
