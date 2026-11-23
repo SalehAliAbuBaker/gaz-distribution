@@ -131,7 +131,22 @@ final class GazStore extends SQLiteOpenHelper {
     private static String id(JSONObject x,String k) throws JSONException {
         String s=x.getString(k);if(s.isEmpty()||s.length()>150||s.indexOf('\u0000')>=0||s.indexOf('/')>=0)throw new JSONException("Invalid identifier");return s;
     }
-    private static Map<String,String> flatten(JSONObject state) throws Exception {
+    /** A blank household size is explicitly unknown, not zero. Kept distinct from invalid values. */
+    static boolean validFamilyMembers(JSONObject f){
+        if(!f.has("members"))return false;
+        Object raw=f.opt("members");
+        if(raw==JSONObject.NULL)return true;
+        if(raw instanceof String){
+            String value=((String)raw).trim();
+            if(!value.matches("[0-9]{1,4}"))return false;
+            int n=Integer.parseInt(value);
+            return n>=1&&n<=1000;
+        }
+        if(!(raw instanceof Number))return false;
+        double value=((Number)raw).doubleValue();
+        return Double.isFinite(value)&&value>=1&&value<=1000&&value==Math.rint(value);
+    }
+    static Map<String,String> flatten(JSONObject state) throws Exception {
         if(state.getString("area").trim().isEmpty()||state.getLong("n")<0)throw new JSONException("Invalid area");
         if(state.has("deploymentId"))id(state,"deploymentId");
         RafdIdentityNumber.validateUnique(state.getJSONArray("families"));
@@ -148,7 +163,7 @@ final class GazStore extends SQLiteOpenHelper {
                     if(kind.equals("families")){
                         if(x.has("archived")&&!(x.get("archived") instanceof Boolean))throw new JSONException("Invalid archive flag");
                         if(x.has("square")&&(!(x.get("square") instanceof String)||x.getString("square").length()>80))throw new JSONException("Invalid square");
-                        if(!family.add(rid)||x.getLong("no")<1||x.getLong("no")>state.getLong("n")||!numbers.add(""+x.getLong("no"))||x.getInt("members")<1||x.getString("name").trim().isEmpty()||!(x.opt("house") instanceof String)||x.getString("house").length()>200)throw new JSONException("Invalid beneficiary");
+                        if(!family.add(rid)||x.getLong("no")<1||x.getLong("no")>state.getLong("n")||!numbers.add(""+x.getLong("no"))||!validFamilyMembers(x)||x.getString("name").trim().isEmpty()||!(x.opt("house") instanceof String)||x.getString("house").length()>200)throw new JSONException("Invalid beneficiary");
                     }else if(kind.equals("cycles")){cycles.add(rid);if(x.getString("title").trim().isEmpty()||x.getInt("quota")<1)throw new JSONException("Invalid cycle");AidQuota.validate(x);}
                     else {x.getJSONObject("permissions");x.getString("hash");x.getString("salt");}
                 }
