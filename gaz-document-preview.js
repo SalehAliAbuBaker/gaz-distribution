@@ -91,10 +91,10 @@ function close(){let owned=historyOwned;hide();if(owned&&history.state?.gazDocum
 id('gazPreviewClose').onclick=close;window.addEventListener('popstate',()=>{if(opened)hide()});document.addEventListener('keydown',e=>{if(opened&&e.key==='Escape'){e.preventDefault();close()}});
 function openPreview(intent='preview'){
  if(opened)return;if(!permitted())return alert('ليس لديك صلاحية عرض الكشوف');const d=statement();if(!d)return alert('اختر دورة التوزيع أولًا');
- snapshot=capture(d,data.area==='غير محدد'?'—':data.area,today(),identitySnapshot());printRows();
+ snapshot=capture(d,data.area==='غير محدد'?'—':data.area,today(),identitySnapshot());printRows(true);
  const clone=id('statementPaper').cloneNode(true);clone.querySelectorAll('.no-print,.noPrint,button,[data-act]').forEach(n=>n.remove());
  // Move only the clean snapshot into the preview, so actions and live edits never print.
- paper.replaceChildren(...clone.childNodes);opened=true;host.hidden=false;document.body.classList.add('gaz-preview-open');document.querySelector('main').inert=true;document.querySelector('body>header').inert=true;document.getElementById('rafdNav').inert=true;id('gazPreviewTitle').textContent='معاينة — '+titleOf(snapshot);status.textContent='جارٍ تجهيز ملف PDF…';controls(false);prepared=null;
+ paper.replaceChildren(...clone.childNodes);if(d.rows.length>50)printRows();opened=true;host.hidden=false;document.body.classList.add('gaz-preview-open');document.querySelector('main').inert=true;document.querySelector('body>header').inert=true;document.getElementById('rafdNav').inert=true;id('gazPreviewTitle').textContent='معاينة — '+titleOf(snapshot);status.textContent='جارٍ تجهيز ملف PDF…';controls(false);prepared=null;
  try{history.pushState({...history.state,gazDocumentPreview:true},'');historyOwned=true}catch{}
  requestAnimationFrame(()=>{if(opened)fit()});document.fonts.ready.then(()=>{if(opened)zoom(scale)});
  id(intent==='print'?'gazPreviewPrint':intent==='share'?'gazPreviewShare':intent==='export'?'gazPreviewMore':'gazPreviewClose').focus({preventScroll:true});
