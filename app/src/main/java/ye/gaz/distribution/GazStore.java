@@ -23,6 +23,11 @@ final class GazStore extends SQLiteOpenHelper {
     static final int MAX = 64 * 1024 * 1024;
     private static final String[] KINDS={"families","cycles","deliveries","users"};
     private final SecretKey secret;
+    // In-process only: these snapshots are never written outside encrypted SQLite.
+    private Map<String,String> decryptedRowsCache;
+    private String stateCache;
+    private void clearReadCache(){decryptedRowsCache=null;stateCache=null;}
+    @Override public synchronized void close(){clearReadCache();super.close();}
     GazStore(Context c) throws Exception {
         super(c,"gaz-encrypted-records.db",null,2);
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
@@ -70,7 +75,7 @@ final class GazStore extends SQLiteOpenHelper {
             if("mother".equals(paired.optString("role",""))){BagInventory.verify(local==null?new JSONObject(readState()):local,paired);}
             if(local!=null)writeState(local.toString());
             pairWrite(paired);db.setTransactionSuccessful();
-        }finally{db.endTransaction();}
+        }finally{try{db.endTransaction();}finally{clearReadCache();}}
     }
     synchronized void restoreIndependent(String json)throws Exception{if(!role().equals("independent"))throw new IllegalStateException("Pair recovery not implemented");writeState(json);}
     synchronized JSONArray loginAccounts()throws Exception{
@@ -118,16 +123,20 @@ final class GazStore extends SQLiteOpenHelper {
     }
     private static String key(String kind,String id){return kind+"\u0000"+id;}
     private Map<String,String> readRows(SQLiteDatabase db) throws Exception {
+        if(decryptedRowsCache!=null)return new LinkedHashMap<>(decryptedRowsCache);
         Map<String,String> rows=new LinkedHashMap<>();
         try(Cursor c=db.rawQuery("SELECT kind,rid,encrypted FROM records ORDER BY kind,rid",null)){
             while(c.moveToNext()){String k=key(c.getString(0),c.getString(1));rows.put(k,open(k,c.getBlob(2)));}
-        }return rows;
+        }
+        decryptedRowsCache=new LinkedHashMap<>(rows);
+        return rows;
     }
     synchronized String readState() throws Exception {
+        if(stateCache!=null)return stateCache;
         Map<String,String> rows=readRows(getReadableDatabase()); if(rows.isEmpty())return "null";
         String meta=rows.remove(key("meta","state"));if(meta==null)throw new IllegalStateException("Metadata missing");
         JSONObject state=new JSONObject(meta);JSONObject order=state.optJSONObject("__gazOrder");state.remove("__gazOrder");for(String kind:KINDS){JSONArray a=new JSONArray();JSONArray ids=order==null?null:order.optJSONArray(kind);if(ids!=null){for(int i=0;i<ids.length();i++){String row=rows.remove(key(kind,ids.getString(i)));if(row==null)throw new IllegalStateException("Record ordering invalid");a.put(new JSONObject(row));}}else{for(Map.Entry<String,String> e:rows.entrySet())if(e.getKey().startsWith(kind+"\u0000"))a.put(new JSONObject(e.getValue()));}state.put(kind,a);}if(order!=null&&!rows.isEmpty())throw new IllegalStateException("Extra records");
-        flatten(state);return state.toString();
+        flatten(state);stateCache=state.toString();return stateCache;
     }
     private static String id(JSONObject x,String k) throws JSONException {
         String s=x.getString(k);if(s.isEmpty()||s.length()>150||s.indexOf('\u0000')>=0||s.indexOf('/')>=0)throw new JSONException("Invalid identifier");return s;
@@ -178,6 +187,7 @@ final class GazStore extends SQLiteOpenHelper {
     synchronized void writeState(String json) throws Exception {
         if(json.length()>MAX)throw new IllegalArgumentException("State too large for test build");
         Map<String,String> next=flatten(new JSONObject(json));SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        boolean committed=false;
         try{
             Map<String,String> prev=readRows(db);
             for(String k:prev.keySet())if(!next.containsKey(k)){int p=k.indexOf('\u0000');db.delete("records","kind=? AND rid=?",new String[]{k.substring(0,p),k.substring(p+1)});}
@@ -185,8 +195,15 @@ final class GazStore extends SQLiteOpenHelper {
                 String k=e.getKey();if(Objects.equals(prev.get(k),e.getValue()))continue;
                 int p=k.indexOf('\u0000');ContentValues v=new ContentValues();v.put("kind",k.substring(0,p));v.put("rid",k.substring(p+1));v.put("encrypted",seal(k,e.getValue()));v.put("modified",System.currentTimeMillis());
                 if(db.insertWithOnConflict("records",null,v,SQLiteDatabase.CONFLICT_REPLACE)<0)throw new IllegalStateException("Write failed");
-            }db.setTransactionSuccessful();
-        }finally{db.endTransaction();}
+            }db.setTransactionSuccessful();committed=true;
+        }finally{
+            boolean ended=false;
+            try{db.endTransaction();ended=true;}finally{
+                // Never trust a cache after a failed commit, including outer sync rollbacks.
+                if(committed&&ended){decryptedRowsCache=new LinkedHashMap<>(next);stateCache=json;}
+                else clearReadCache();
+            }
+        }
     }
     synchronized byte[] backup(char[] pass) throws Exception {
         String contents=readState();if("null".equals(contents))throw new IllegalStateException("No data");
