@@ -24,7 +24,7 @@ final class SyncRules {
     static String grant(JSONObject state,JSONObject local,String device,String cycle,String family,PrivateKey secret)throws Exception{
         require("mother".equals(state.getString("role")),"Mother required");child(state,device);
         JSONObject c=find(local.getJSONArray("cycles"),cycle),f=find(local.getJSONArray("families"),family);
-        require(c!=null&&f!=null&&!c.optBoolean("closed")&&delivery(local,cycle,family)==null,"Unavailable family/cycle");
+        require(c!=null&&f!=null&&!f.optBoolean("archived")&&!c.optBoolean("closed")&&delivery(local,cycle,family)==null,"Unavailable family/cycle");
         String k=key(cycle,family);JSONObject grants=map(state,"grants");require(!grants.has(k),"Already allocated");require(grants.length()<20000,"Test grant limit");
         JSONObject p=base(state,"grant",device).put("id",UUID.randomUUID().toString()).put("cycle",cycle).put("family",family).put("maxQty",quantity(Integer.valueOf(AidQuota.forFamily(c,f)))).put("cycleTitle",c.getString("title")).put("cycleDate",c.getString("date")).put("name",f.getString("name")).put("house",f.getString("house")).put("no",f.getInt("no")).put("square",f.optString("square",""));
         RafdMoney.checkCycle(c);if(!RafdMoney.kind(c).equals("none")&&RafdMoney.unit(c)>0){p.put("valueKind",RafdMoney.kind(c)).put("currency",RafdMoney.currency(c)).put("unitMinor",RafdMoney.unit(c));}
@@ -75,10 +75,10 @@ final class SyncRules {
         CentralUsers.observe(s,device,p);boolean policyOnly=p.optBoolean("policyOnly",false);JSONArray incoming=p.getJSONArray("receipts");require(incoming.length()<=20000&&(!policyOnly||incoming.length()==0),"Invalid receipts");
         for(int i=0;i<incoming.length();i++)importReceipt(s,local,device,incoming.getString(i));
         MotherDelivery.acceptReturns(s,device,p,policyOnly);
-        JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts"),squares=new JSONObject(),houses=new JSONObject(),controls=new JSONObject();
+        JSONArray grants=new JSONArray(),acks=new JSONArray();JSONObject g=map(s,"grants"),r=map(s,"receipts"),squares=new JSONObject(),houses=new JSONObject(),names=new JSONObject(),controls=new JSONObject();
         if(!policyOnly)for(Iterator<String> it=g.keys();it.hasNext();){String k=it.next(),packet=g.getString(k);JSONObject gp=SyncWire.peek(packet);
-            if(device.equals(gp.getString("device"))){grants.put(packet);JSONObject family=find(local.getJSONArray("families"),gp.getString("family"));require(family!=null,"Missing allocated family");squares.put(k,family.optString("square",""));houses.put(k,family.optString("house",""));if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));JSONObject ctrl=MotherDelivery.response(s,local,k);if(ctrl!=null)controls.put(k,ctrl);}}
-        JSONObject result=base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares).put("houses",houses).put("deliveryControls",controls);JSONObject accounts=CentralUsers.policy(s,device);if(accounts!=null)result.put("accountPolicy",accounts);return result;
+            if(device.equals(gp.getString("device"))){grants.put(packet);JSONObject family=find(local.getJSONArray("families"),gp.getString("family"));require(family!=null,"Missing allocated family");squares.put(k,family.optString("square",""));houses.put(k,family.optString("house",""));names.put(k,family.optString("name",""));if(r.has(k))acks.put(SyncWire.peek(r.getString(k)).getString("id"));JSONObject ctrl=MotherDelivery.response(s,local,k);if(ctrl!=null)controls.put(k,ctrl);}}
+        JSONObject result=base(s,"result",device).put("challenge",challenge).put("grants",grants).put("acks",acks).put("squares",squares).put("houses",houses).put("names",names).put("deliveryControls",controls);JSONObject accounts=CentralUsers.policy(s,device);if(accounts!=null)result.put("accountPolicy",accounts);return result;
     }
     static void acceptResponse(JSONObject s,String packet,String challenge)throws Exception{
         JSONObject p=SyncWire.verify(packet,s.getString("motherPub"),"result");context(s,p,s.getString("device"));require(challenge.equals(p.getString("challenge")),"Stale response");
@@ -87,6 +87,7 @@ final class SyncRules {
         MotherDelivery.acceptControls(s,p);
         if(p.has("houses")){JSONObject incoming=p.getJSONObject("houses"),known=map(s,"grants"),labels=map(s,"houseLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&((String)value).length()<=200,"Invalid family link");labels.put(k,value);}}
         if(p.has("squares")){JSONObject incoming=p.getJSONObject("squares"),known=map(s,"grants"),labels=map(s,"squareLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&((String)value).length()<=80,"Invalid square label");labels.put(k,value);}}
+        if(p.has("names")){JSONObject incoming=p.getJSONObject("names"),known=map(s,"grants"),labels=map(s,"nameLabels");for(Iterator<String> it=incoming.keys();it.hasNext();){String k=it.next();Object value=incoming.get(k);require(known.has(k)&&value instanceof String&&!((String)value).trim().isEmpty()&&((String)value).length()<=180,"Invalid registrant name");labels.put(k,value);}}
         Set<String> ids=new HashSet<>();for(int i=0;i<acks.length();i++)ids.add(acks.getString(i));
         JSONObject out=map(s,"outbox"),accepted=map(s,"acked");
         for(Iterator<String> it=out.keys();it.hasNext();){String k=it.next();if(ids.contains(SyncWire.peek(out.getString(k)).getString("id")))accepted.put(k,true);}
@@ -101,7 +102,7 @@ final class SyncRules {
             for(String field:new String[]{"title","date","quota"})require(String.valueOf(before.get(field)).equals(String.valueOf(after.get(field))),"Allocated cycle cannot be changed");
             require(RafdMoney.kind(before).equals(RafdMoney.kind(after))&&RafdMoney.currency(before).equals(RafdMoney.currency(after))&&RafdMoney.unit(before)==RafdMoney.unit(after),"Allocated bag value cannot be changed");
             for(String field:new String[]{"aidTwoAbove","aidThreeAbove"})require(AidQuota.threshold(before,field)==AidQuota.threshold(after,field),"Allocated cycle aid rules cannot be changed");
-            for(String field:new String[]{"name","no"})require(String.valueOf(fb.get(field)).equals(String.valueOf(fa.get(field))),"Allocated family cannot be changed");
+            require(fb.getInt("no")==fa.getInt("no"),"Registered number cannot be changed after allocation");
             require(!after.optBoolean("closed")||MotherDelivery.resolved(s,k),"Outstanding allocation");
             JSONObject prev=delivery(old,c,f),cur=delivery(next,c,f);
             if(MotherDelivery.resolved(s,k)){require(CentralUsers.same(prev,cur),"Synchronized delivery protected");}

@@ -146,6 +146,7 @@ final class GazStore extends SQLiteOpenHelper {
                     rid=id(x,"id");
                     if(kind.equals("cycles"))RafdMoney.checkCycle(x);
                     if(kind.equals("families")){
+                        if(x.has("archived")&&!(x.get("archived") instanceof Boolean))throw new JSONException("Invalid archive flag");
                         if(x.has("square")&&(!(x.get("square") instanceof String)||x.getString("square").length()>80))throw new JSONException("Invalid square");
                         if(!family.add(rid)||x.getLong("no")<1||x.getLong("no")>state.getLong("n")||!numbers.add(""+x.getLong("no"))||x.getInt("members")<1||x.getString("name").trim().isEmpty()||!(x.opt("house") instanceof String)||x.getString("house").length()>200)throw new JSONException("Invalid beneficiary");
                     }else if(kind.equals("cycles")){cycles.add(rid);if(x.getString("title").trim().isEmpty()||x.getInt("quota")<1)throw new JSONException("Invalid cycle");AidQuota.validate(x);}
