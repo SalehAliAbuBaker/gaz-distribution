@@ -1,0 +1,15 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const html=fs.readFileSync('index.html','utf8');
+assert.equal(html,fs.readFileSync('docs/index.html','utf8'),'Android and web markup should match');
+assert.match(html,/#identityForm \.rafd-sign-settings \{/,'Signature fields need responsive grid');
+assert.match(html,/grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,210px\),1fr\)\)/,'Short screens must use one signature column');
+assert.match(html,/#identityForm \.rafd-field:not\(\.rafd-infield-empty\) > \.rafd-inline-label/,'Populated identity inputs hide their labels');
+assert.match(html,/#settingsBackup \.cloud-email-box \.email-row \{/,'Cloud email row should have its own layout');
+assert.match(html,/grid-template-columns:minmax\(0,1fr\) auto/,'Save button must not consume entire email row');
+assert.match(html,/#settingsBackup \.cloud-email-box \.email-row > button \{/,'Save button must have localized width override');
+assert.match(html,/width:auto!important;min-width:62px/,'Save button must override generic 100% width');
+assert.match(html,/function loadPrintIdentity\(\)[\s\S]*?window\.rafdRefreshFieldLabels\?\.\(\$\('identityForm'\)\)/,'Identity values should refresh label states after programmatic population');
+assert.match(html,/function loadCloudEmail\(\)[\s\S]*?window\.rafdRefreshFieldLabels\?\.\(mailField\)/,'Cloud email field should refresh its label after loading saved address');
+console.log('Rafd settings identity/backup layout checks PASSED');
