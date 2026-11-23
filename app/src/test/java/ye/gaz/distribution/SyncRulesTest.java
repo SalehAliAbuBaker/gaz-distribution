@@ -97,4 +97,30 @@ public class SyncRulesTest {
         assertThrows(Exception.class,()->SyncRules.protectMother(f.ms,f.local,changed));
         f.sync();assertThrows(Exception.class,()->SyncRules.record(f.as,f.k,4,f.a.getPrivate()));SyncRules.record(f.as,f.k,3,f.a.getPrivate());f.sync();assertEquals(3,f.local.getJSONArray("deliveries").getJSONObject(0).getInt("q"));
     }
+    @Test public void motherCanRenameAndArchiveLinkedFamilyWhilePreservingReceipt()throws Exception {
+        Fixture f=new Fixture();String grant=f.grant();f.sync();
+        SyncRules.record(f.as,f.k,1,f.a.getPrivate());f.sync();
+        String receipt=SyncRules.map(f.ms,"receipts").getString(f.k);
+        JSONObject changed=SyncRules.copy(f.local);
+        JSONObject person=changed.getJSONArray("families").getJSONObject(0);
+        person.put("name","اسم مصحح").put("identityNo","0012345678").put("archived",true);
+        SyncRules.protectMother(f.ms,f.local,changed);
+        f.local=changed;f.sync();
+        assertEquals("اسم مصحح",SyncRules.map(f.as,"nameLabels").getString(f.k));
+        assertEquals(grant,SyncRules.map(f.as,"grants").getString(f.k));
+        assertEquals(receipt,SyncRules.map(f.ms,"receipts").getString(f.k));
+        assertEquals(1,f.local.getJSONArray("deliveries").length());
+        JSONObject renumbered=SyncRules.copy(f.local);
+        renumbered.getJSONArray("families").getJSONObject(0).put("no",999);
+        assertThrows(Exception.class,()->SyncRules.protectMother(f.ms,f.local,renumbered));
+        JSONObject restored=SyncRules.copy(f.local);
+        restored.getJSONArray("families").getJSONObject(0).put("archived",false);
+        SyncRules.protectMother(f.ms,f.local,restored);
+    }
+    @Test public void archivedRegistrantCannotReceiveFreshGrant()throws Exception {
+        Fixture f=new Fixture();
+        f.local.getJSONArray("families").getJSONObject(0).put("archived",true);
+        assertThrows(Exception.class,()->f.grant());
+    }
+
 }

@@ -126,8 +126,10 @@ public final class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(),"GazNative");setContentView(web);web.loadUrl(HOME);
     }
     private final class Bridge {
+        private volatile String lastWriteFailure="";
+        @JavascriptInterface public String stateSaveError(){return lastWriteFailure;}
         @JavascriptInterface public String readState(){try{if(!permitValid())return "";return isDistributor()?store.distributorWebState():store.readState();}catch(Exception e){return "";}}
-        @JavascriptInterface public boolean writeState(String json){try{if(!permitValid())return false;if(distributorSetupOnly()){JSONObject n=new JSONObject(json);for(String k:new String[]{"families","cycles","deliveries"})if(n.getJSONArray(k).length()!=0)return false;}store.writeLocalState(json);return true;}catch(Exception e){return false;}}
+        @JavascriptInterface public boolean writeState(String json){try{lastWriteFailure="";if(!permitValid()){lastWriteFailure="تصريح التشغيل غير صالح";return false;}if(distributorSetupOnly()){JSONObject n=new JSONObject(json);for(String k:new String[]{"families","cycles","deliveries"})if(n.getJSONArray(k).length()!=0){lastWriteFailure="تسجيل بيانات الأم غير متاح على جهاز الموزع";return false;}}store.writeLocalState(json);return true;}catch(Exception e){String message=e.getMessage();lastWriteFailure=message==null?"فشل التحقق من السجل":message.replaceAll("[\\r\\n]+"," ").substring(0,Math.min(200,message.replaceAll("[\\r\\n]+"," ").length()));return false;}}
         @JavascriptInterface public String licensedRole(){return permitValid()?activePermit.role:"";}
         @JavascriptInterface public void licenseInfo(){runOnUiThread(()->showPermitInfo());}
         @JavascriptInterface public void scanRegistryBarcode(){runOnUiThread(()->startRegistryBarcodeScan());}

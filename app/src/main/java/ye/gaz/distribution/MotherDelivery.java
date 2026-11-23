@@ -20,6 +20,7 @@ final class MotherDelivery {
         String cycle=grant.getString("cycle"),family=grant.getString("family");
         JSONObject c=SyncRules.find(local.getJSONArray("cycles"),cycle),f=SyncRules.find(local.getJSONArray("families"),family);
         SyncRules.require(c!=null&&f!=null&&!c.optBoolean("closed"),"Open cycle required");
+        if("add".equals(op))SyncRules.require(!f.optBoolean("archived"),"Archived registrant cannot receive new aid");
         JSONObject old=SyncRules.delivery(local,cycle,family),next=null,prior=control(s,k);
         JSONObject policy=prior==null?new JSONObject():SyncRules.copy(prior);
         policy.put("locked",true);
@@ -55,7 +56,9 @@ final class MotherDelivery {
         JSONObject grants=SyncRules.map(s,"grants");JSONArray rows=local.getJSONArray("deliveries");
         for(Map.Entry<String,Integer> e:tasks.entrySet()){
             String family=e.getKey(),k=SyncRules.key(cycle,family);
-            SyncRules.require(SyncRules.find(local.getJSONArray("families"),family)!=null,"Missing family");
+            JSONObject currentFamily=SyncRules.find(local.getJSONArray("families"),family);
+            SyncRules.require(currentFamily!=null,"Missing family");
+            if("add".equals(op))SyncRules.require(!currentFamily.optBoolean("archived"),"Archived registrant cannot receive new aid");
             JSONObject old=SyncRules.delivery(local,cycle,family);SyncRules.require("delete".equals(op)?old!=null:old==null,"Delivery changed");
             if(grants.has(k)){change(s,local,k,op,e.getValue(),actor,reason);continue;}
             if("delete".equals(op)){for(int i=rows.length()-1;i>=0;i--){JSONObject row=rows.getJSONObject(i);if(cycle.equals(row.getString("c"))&&family.equals(row.getString("f")))rows.remove(i);}audit(s,k,actor,reason,op,old,null);}
