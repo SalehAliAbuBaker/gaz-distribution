@@ -66,6 +66,8 @@ function totals(s){
 }
 const titleOf=s=>s.mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع المساعدات';
 const totalOf=s=>s.rows.reduce((sum,r)=>sum+r.quantity,0);
+const totalLabel=s=>s.mode==='pending'?'إجمالي العطايا':'إجمالي العطايا المصروفة';
+const summaryRows=(s,o)=>o.totals?[[totalLabel(s),String(totalOf(s))],...(o.value?totals(s):[])]:[];
 
 function metaItems(s,o){
  const c=s.cycle;const fields={
@@ -112,18 +114,17 @@ function definition(s,o=options){
   meta.push([cell(second[1]),cell(second[0],{bold:true,fillColor:'#f1f5f9'}),cell(first[1]),cell(first[0],{bold:true,fillColor:'#f1f5f9'})]);
  }
  // PDF table visual order is left-to-right; source order is RTL.
- const displayCols=visibleColumns(s,o),cols=displayCols.slice().reverse(),totalKey=displayCols[0].key;
+ const displayCols=visibleColumns(s,o),cols=displayCols.slice().reverse();
  const body=[
   cols.map(col=>cell(col.title,{bold:true,alignment:'center',fillColor:'#e2e8f0'})),
   ...s.rows.map((r,i)=>cols.map(col=>cell(col.get(r,i),{alignment:col.align||'right',bold:col.key==='quantity'})))
  ];
  if(!s.rows.length)body.push([cell('لا توجد أسر مطابقة',{colSpan:cols.length,alignment:'center'}),...cols.slice(1).map(()=>({}))]);
- if(o.totals){
-  body.push(cols.map(col=>cell(col.key===totalKey?'إجمالي العطايا':col.key==='quantity'?String(totalOf(s)):'',{bold:true,alignment:col.align||'right',fillColor:'#f1f5f9'})));
-  if(o.value)for(const [label,amount] of totals(s)){
-   body.push(cols.map(col=>cell(col.key===totalKey?label:col.key==='value'?amount:'',{bold:true,fillColor:'#e5f4ed'})));
-  }
- }
+ const summary=summaryRows(s,o);
+ const summaryBlock=summary.length?[{unbreakable:true,table:{widths:['*',175],body:summary.map(([label,value])=>[
+  cell(value,{bold:true,alignment:'center',fillColor:'#eff5f2'}),
+  cell(label,{bold:true,alignment:'right',fillColor:'#eff5f2'})
+ ])},layout:grid,margin:[0,5,0,16]}]:[];
  const header=[];
  if(o.basmala)header.push({text:'بسم الله الرحمن الرحيم',alignment:'center',bold:true,fontSize:11,margin:[0,0,0,4]});
  if(o.entity&&(s.identity.entity||s.identity.letterhead||s.identity.address))header.push({columns:[{width:'*',text:s.identity.address,alignment:'left',fontSize:9},{width:'*',stack:[{text:s.identity.entity,bold:true,fontSize:11},{text:s.identity.letterhead,fontSize:9}],alignment:'right'}],columnGap:10,margin:[0,1,0,6]});
@@ -132,7 +133,8 @@ function definition(s,o=options){
  ...header,
  {text:titleOf(s),bold:true,alignment:'center',fontSize:16,margin:[0,2,0,9]},
  ...(meta.length?[{table:{widths:['*',65,'*',65],body:meta,dontBreakRows:true},layout:grid,margin:[0,0,0,9]}]:[]),
- {table:{headerRows:1,widths:columnWidths(cols),body,dontBreakRows:true,keepWithHeaderRows:1},layout:grid,margin:[0,0,0,15]},
+ {table:{headerRows:1,widths:columnWidths(cols),body,dontBreakRows:true,keepWithHeaderRows:1},layout:grid,margin:[0,0,0,summary.length?0:16]},
+ ...summaryBlock,
  ...(o.signatures?[{unbreakable:true,table:{widths:['*','*'],body:[['approved','prepared'].map(k=>({stack:[{text:s.identity[k+'Role'],bold:true},{text:'الاسم: '+(s.identity[k+'Name']||'.....................................'),margin:[0,6,0,0]},{text:'التوقيع: ..................................',margin:[0,6,0,0]}],margin:6}))]},layout:grid}]:[])
  ],footer:o.footer?(page,count)=>({text:'صفحة '+page+' من '+count,alignment:'center',fontSize:8,color:'#64748b',margin:[0,7,0,0]}):undefined};
 }
@@ -171,8 +173,10 @@ function renderReportPaper(s,o){
  const colgroup='<colgroup>'+cols.map(c=>'<col style="width:'+(100*c.weight/widthSum).toFixed(2)+'%">').join('')+'</colgroup>';
  const esc=htmlSafe;
  const tableRows=s.rows.map((r,i)=>'<tr>'+cols.map(c=>'<td'+(c.align==='center'?' class="gaz-center"':'')+'>'+esc(c.get(r,i))+'</td>').join('')+'</tr>').join('');
- const sum=o.totals?'<tr class="gaz-report-total">'+cols.map(c=>'<td>'+esc(c.key===cols[0].key?'إجمالي العطايا':c.key==='quantity'?String(totalOf(s)):'')+'</td>').join('')+'</tr>':'';
- const moneyRows=o.totals&&o.value?totals(s).map(([name,amount])=>'<tr class="gaz-report-total">'+cols.map(c=>'<td>'+esc(c.key===cols[0].key?name:c.key==='value'?amount:'')+'</td>').join('')+'</tr>').join(''):'';
+ const summary=summaryRows(s,o);
+ const summaryHtml=summary.length?'<div class="gaz-report-summary" aria-label="ملخص الكشف">'+
+  summary.map(([label,value])=>'<div class="gaz-report-summary-row"><strong>'+esc(label)+'</strong><b>'+esc(value)+'</b></div>').join('')+
+ '</div>':'';
  const metaRows=[];for(let i=0;i<meta.length;i+=2){const a=meta[i],b=meta[i+1];metaRows.push('<tr><th>'+esc(a[0])+'</th><td>'+esc(a[1])+'</td>'+(b?'<th>'+esc(b[0])+'</th><td>'+esc(b[1])+'</td>':'<th></th><td></td>')+'</tr>')}
  const sign=k=>'<div><strong>'+esc(s.identity[k+'Role'])+'</strong><p>الاسم: '+esc(s.identity[k+'Name']||'................................')+'</p><p>التوقيع: ................................</p></div>';
  const entity=s.identity;
@@ -180,7 +184,7 @@ function renderReportPaper(s,o){
  (o.entity?'<div class="gaz-report-identity"><div><strong>'+esc(entity.entity)+'</strong><small>'+esc(entity.letterhead)+'</small></div><small>'+esc(entity.address)+'</small></div>':'')+
  '<h1>'+esc(titleOf(s))+'</h1></div>'+
  (metaRows.length?'<table class="gaz-report-meta"><tbody>'+metaRows.join('')+'</tbody></table>':'')+
- '<table class="gaz-report-table">'+colgroup+'<thead><tr>'+cols.map(c=>'<th>'+esc(c.title)+'</th>').join('')+'</tr></thead><tbody>'+(tableRows||'<tr><td colspan="'+cols.length+'">لا توجد أسر مطابقة</td></tr>')+sum+moneyRows+'</tbody></table>'+
+ '<table class="gaz-report-table">'+colgroup+'<thead><tr>'+cols.map(c=>'<th>'+esc(c.title)+'</th>').join('')+'</tr></thead><tbody>'+(tableRows||'<tr><td colspan="'+cols.length+'">لا توجد أسر مطابقة</td></tr>')+'</tbody></table>'+summaryHtml+
  (o.signatures?'<div class="gaz-report-signatures">'+sign('prepared')+sign('approved')+'</div>':'')+
  (o.footer?'<p class="gaz-report-page">ترقيم الصفحات يظهر في ملف PDF والطباعة</p>':'');
 }
