@@ -166,6 +166,9 @@ function paintOptions(){
 }
 function renderReportPaper(s,o){
  const cols=visibleColumns(s,o),meta=metaItems(s,o);
+ paper.style.setProperty('--gaz-table-scale',cols.length>8?'.78':'1');
+ const widthSum=cols.reduce((n,c)=>n+c.weight,0);
+ const colgroup='<colgroup>'+cols.map(c=>'<col style="width:'+(100*c.weight/widthSum).toFixed(2)+'%">').join('')+'</colgroup>';
  const esc=htmlSafe;
  const tableRows=s.rows.map((r,i)=>'<tr>'+cols.map(c=>'<td'+(c.align==='center'?' class="gaz-center"':'')+'>'+esc(c.get(r,i))+'</td>').join('')+'</tr>').join('');
  const sum=o.totals?'<tr class="gaz-report-total">'+cols.map(c=>'<td>'+esc(c.key===cols[0].key?'إجمالي العطايا':c.key==='quantity'?String(totalOf(s)):'')+'</td>').join('')+'</tr>':'';
@@ -177,7 +180,7 @@ function renderReportPaper(s,o){
  (o.entity?'<div class="gaz-report-identity"><div><strong>'+esc(entity.entity)+'</strong><small>'+esc(entity.letterhead)+'</small></div><small>'+esc(entity.address)+'</small></div>':'')+
  '<h1>'+esc(titleOf(s))+'</h1></div>'+
  (metaRows.length?'<table class="gaz-report-meta"><tbody>'+metaRows.join('')+'</tbody></table>':'')+
- '<table class="gaz-report-table"><thead><tr>'+cols.map(c=>'<th>'+esc(c.title)+'</th>').join('')+'</tr></thead><tbody>'+(tableRows||'<tr><td colspan="'+cols.length+'">لا توجد أسر مطابقة</td></tr>')+sum+moneyRows+'</tbody></table>'+
+ '<table class="gaz-report-table">'+colgroup+'<thead><tr>'+cols.map(c=>'<th>'+esc(c.title)+'</th>').join('')+'</tr></thead><tbody>'+(tableRows||'<tr><td colspan="'+cols.length+'">لا توجد أسر مطابقة</td></tr>')+sum+moneyRows+'</tbody></table>'+
  (o.signatures?'<div class="gaz-report-signatures">'+sign('prepared')+sign('approved')+'</div>':'')+
  (o.footer?'<p class="gaz-report-page">ترقيم الصفحات يظهر في ملف PDF والطباعة</p>':'');
 }
