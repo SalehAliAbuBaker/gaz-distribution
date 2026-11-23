@@ -618,24 +618,41 @@ function loadPrintIdentity(){const p=printIdentity();for(const [id,k] of [['enti
 function statementHeader(title,p){return '<div class="stmt-head"><div class="basmala">بسم الله الرحمن الرحيم</div><div class="stmt-identity"><div class="stmt-entity">'+(p.entity?'<b>'+esc(p.entity)+'</b>':'')+(p.letterhead?'<div>'+esc(p.letterhead)+'</div>':'')+'</div><div class="stmt-address">'+(p.address?esc(p.address):'')+'</div></div><h1>'+esc(title)+'</h1></div>'}
 function statementSign(p){if(!p.signatures)return '';const sign=(role,name)=>'<div><b>'+esc(role)+'</b><p>الاسم: '+(name?esc(name):'<i class="ln"></i>')+'</p><p>التوقيع: <i class="ln"></i></p></div>';return '<div class="stmt-sign">'+sign(p.preparedRole,p.preparedName)+sign(p.approvedRole,p.approvedName)+'</div>'}
 function statement(){const c=cycleFor('printCycle'),mode=$('statementMode').value;return c?{c,mode,rows:rowsFor(c,mode)}:null}
-function printRows(){
+function printRows(full=false){
  if(!can('reports')){$('statementPaper').textContent='';return}
  const d=statement();if(!d){$('statementPaper').textContent='اختر حقيبة';return}
- const {c,rows,mode}=d,total=rows.reduce((n,r)=>n+(r.d?.q||0),0),title=mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع المساعدات';
+ const {c,rows,mode}=d,total=rows.reduce((n,r)=>n+(r.d?.q||0),0),
+       title=mode==='pending'?'كشف الأسر التي لم تستلم':'كشف توزيع المساعدات';
+ const showCategory=rows.some(r=>String(r.f.categories||'').trim());
+ const showValue=c.valueKind!=='none'||rows.some(r=>r.d?.amountMinor!=null);
+ // Screen previews are intentionally bounded; the PDF preview requests full=true.
+ const visible=full?rows:rows.slice(0,50),leading=4+(showCategory?1:0),
+       columns=leading+1+(showValue?1:0);
  const valueMeta=moneyLabel(c)+(c.unitMinor?' | قيمة الواحدة: '+moneyText(c.unitMinor,c.currency):'');
+ const header='<tr><th>م</th><th>المسجل</th><th>رابط الأسرة / المربع / المنطقة</th><th>الأفراد</th>'+
+    (showCategory?'<th>الفئة</th>':'')+'<th>الكمية</th>'+
+    (showValue?'<th>القيمة النقدية / المقابلة</th>':'')+'<th class="no-print">إجراء</th></tr>';
+ const body=visible.map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(r.f.name)+'</td>'+
+    '<td>'+esc(r.f.house||'—')+' / '+esc(r.f.square||'—')+' / '+esc(r.f.area||(data.area==='غير محدد'?'—':data.area))+'</td>'+
+    '<td>'+esc(membersText(r.f))+'</td>'+
+    (showCategory?'<td>'+esc(r.f.categories||'—')+'</td>':'')+
+    '<td><b>'+(r.d?.q||'—')+'</b></td>'+
+    (showValue?'<td>'+esc(rowAmount(r.d))+'</td>':'')+
+    '<td class="no-print">'+(r.d&&!c.closed?btn('تعديل','stmt-edit',r.f.id,'','edit')+btn('حذف','stmt-delete',r.f.id,'danger','delete'):'')+'</td></tr>').join('');
+ const sum='<tr><th colspan="'+leading+'">إجمالي العطايا</th><th>'+total+'</th>'+
+    (showValue?'<td>—</td>':'')+'<td class="no-print"></td></tr>';
  $('statementPaper').innerHTML=statementHeader(title,identitySnapshot())+
  '<table class="stmt-meta"><tr><th>رقم المستند</th><td>'+esc(c.docNo||'-')+'</td><th>تاريخ الحقيبة</th><td>'+esc(latinDigits(c.date))+'</td></tr>'+
  '<tr><th>اسم الحقيبة</th><td>'+esc(c.title)+'</td><th>المسؤول / المورد</th><td>'+esc(c.donor||'-')+'</td></tr>'+
- '<tr><th>نوع القيمة</th><td colspan="3">'+esc(valueMeta)+'</td></tr>'+
- '<tr><th>التفاصيل</th><td colspan="3">'+esc(c.details||'-')+'</td></tr>'+
- '<tr><th>عدد الأسر</th><td>'+rows.length+'</td><th>تاريخ الإصدار</th><td>'+today()+'</td></tr>'+ '<tr><th>رصيد الحقيبة</th><td colspan="3">'+esc(bagStockText(c))+'</td></tr></table>'+
- '<table class="stmt-table"><thead><tr><th>م</th><th>المسجل</th><th>رابط الأسرة/رقم المنزل / المربع / المنطقة</th><th>الأفراد</th><th>الفئة</th><th>الكمية</th><th>القيمة النقدية / المقابلة</th><th class="no-print">إجراء</th></tr></thead><tbody>'+
- rows.map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(r.f.name)+'</td><td>'+esc(r.f.house||'—')+' / '+esc(r.f.square||'—')+' / '+esc(r.f.area||(data.area==='غير محدد'?'—':data.area))+'</td>'+
- '<td>'+esc(membersText(r.f))+'</td><td>'+esc(r.f.categories||'-')+'</td><td><b>'+(r.d?.q||'—')+'</b></td>'+
- '<td>'+esc(rowAmount(r.d))+'</td><td class="no-print">'+(r.d&&!c.closed?btn('تعديل','stmt-edit',r.f.id,'','edit')+btn('حذف','stmt-delete',r.f.id,'danger','delete'):'')+'</td></tr>').join('')+
- '<tr><th colspan="5">إجمالي العطايا</th><th>'+total+'</th><td>—</td><td class="no-print"></td></tr>'+
- '<tr><th colspan="7" class="rafd-value-total">'+esc(financialTotal(rows))+'</th><td class="no-print"></td></tr></tbody></table>'+
- statementSign(identitySnapshot());applyPermissions()
+ '<tr><th>نوع العطية</th><td colspan="3">'+esc(valueMeta)+'</td></tr>'+
+ (c.details?'<tr><th>التفاصيل</th><td colspan="3">'+esc(c.details)+'</td></tr>':'')+
+ '<tr><th>عدد الأسر</th><td>'+rows.length+'</td><th>تاريخ الإصدار</th><td>'+today()+'</td></tr>'+
+ '<tr><th>رصيد الحقيبة</th><td colspan="3">'+esc(bagStockText(c))+'</td></tr></table>'+
+ (!full&&rows.length>visible.length?'<small class="stmt-screen-hint no-print">تظهر أول '+visible.length+' أسرة لسرعة الشاشة؛ المعاينة والطباعة تشمل جميع الأسر وعددها '+rows.length+'.</small>':'')+
+ '<table class="stmt-table"><thead>'+header+'</thead><tbody>'+body+sum+
+ (showValue?'<tr><th colspan="'+columns+'" class="rafd-value-total">'+esc(financialTotal(rows))+'</th><td class="no-print"></td></tr>':'')+
+ '</tbody></table>'+statementSign(identitySnapshot());
+ applyPermissions()
 }
 function statementText(){
  const d=statement();if(!d)return '';
