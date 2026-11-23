@@ -140,7 +140,7 @@ final class GazStore extends SQLiteOpenHelper {
         double value=((Number)raw).doubleValue();
         return Double.isFinite(value)&&value>=1&&value<=1000&&value==Math.rint(value);
     }
-    private static Map<String,String> flatten(JSONObject state) throws Exception {
+    static Map<String,String> flatten(JSONObject state) throws Exception {
         if(state.getString("area").trim().isEmpty()||state.getLong("n")<0)throw new JSONException("Invalid area");
         if(state.has("deploymentId"))id(state,"deploymentId");
         RafdIdentityNumber.validateUnique(state.getJSONArray("families"));
