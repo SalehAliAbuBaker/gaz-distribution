@@ -53,7 +53,7 @@ final class BagInventory {
         for(int i=0;i<movements.length();i++){
             JSONObject d=movements.getJSONObject(i);
             if(!cycle.equals(d.getString("c")))continue;
-            long q=integer(d.get("q"),1,10_000,"كمية التسليم");
+            long q=integer(d.get("q"),1,1_000_000_000,"كمية التسليم");
             delivered=Math.addExact(delivered,q);
             deliveredFamilies.add(d.getString("f"));
         }
