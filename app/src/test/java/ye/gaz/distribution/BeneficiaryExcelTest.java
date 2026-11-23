@@ -21,8 +21,14 @@ public class BeneficiaryExcelTest {
         java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();try(java.util.zip.ZipOutputStream out=new java.util.zip.ZipOutputStream(bytes)){for(java.util.Map.Entry<String,byte[]> e:files.entrySet()){out.putNextEntry(new java.util.zip.ZipEntry(e.getKey()));out.write(e.getValue());out.closeEntry();}}return bytes.toByteArray();
     }
     @Test public void readFullBatchAndRejectOverflow()throws Exception{
-        JSONArray a=BeneficiaryExcel.read(populated(100));assertEquals(100,a.length());assertEquals("001",a.getJSONObject(0).getString("house"));assertEquals("5",a.getJSONObject(0).getString("members"));
-        JSONObject data=new JSONObject().put("n",0).put("families",new JSONArray());assertEquals(100,BeneficiaryExcel.append(data,a));assertEquals(100,data.getLong("n"));assertThrows(Exception.class,()->BeneficiaryExcel.read(populated(101)));assertThrows(Exception.class,()->BeneficiaryExcel.numericText("1e10000000"));
+        JSONArray a=BeneficiaryExcel.read(populated(1000));assertEquals(1000,a.length());assertEquals("001",a.getJSONObject(0).getString("house"));assertEquals("5",a.getJSONObject(0).getString("members"));
+        JSONObject data=new JSONObject().put("n",0).put("families",new JSONArray());assertEquals(1000,BeneficiaryExcel.append(data,a));assertEquals(1000,data.getLong("n"));assertThrows(Exception.class,()->BeneficiaryExcel.read(populated(1001)));assertThrows(Exception.class,()->BeneficiaryExcel.numericText("1e10000000"));
+    }
+    @Test public void thousandRowTemplateHasCorrectRange()throws Exception{
+        String sheet=new String(BeneficiaryExcel.unzip(BeneficiaryExcel.template()).get("xl/worksheets/sheet1.xml"),java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(sheet.contains("<dimension ref=\"A1:J1001\"/>"));
+        assertTrue(sheet.contains("<row r=\"1001\">"));
+        assertTrue(sheet.contains("<autoFilter ref=\"A1:J1001\"/>"));
     }
     @Test public void familyLinkOptionalAndText()throws Exception{
         JSONObject data=new JSONObject().put("families",new JSONArray()).put("n",0);
