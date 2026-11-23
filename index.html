@@ -436,7 +436,7 @@ function familyList(){
  applyPermissions();$('familyAdd').hidden=showArchivedRegistrants||!can('add');
 }
 
-function cycleList(){$('cycleList').innerHTML=data.cycles.map(c=>'<div class="row"><div><b>'+esc(c.title)+'</b><small>'+esc(c.docNo||'-')+' | '+esc(c.date)+' | '+esc(c.donor||'-')+' | '+moneyLabel(c)+(c.unitMinor?' | '+moneyText(c.unitMinor,c.currency):'')+' | '+(c.closed?'مغلقة':'مفتوحة')+'</small></div><div class="actions">'+btn('تعديل','cycle-edit',c.id,'','edit')+btn(c.closed?'إعادة فتح':'إغلاق','cycle-close',c.id,'muted','edit')+btn('حذف','cycle-delete',c.id,'danger','delete')+btn('كشف','cycle-statement',c.id,'','reports')+'</div></div>').join('')||'لا توجد دورات'}
+function cycleList(){$('cycleList').innerHTML=data.cycles.map(c=>'<div class="row"><div><b>'+esc(c.title)+'</b><small>'+esc(c.docNo||'-')+' | '+esc(c.date)+' | '+esc(c.donor||'-')+' | '+moneyLabel(c)+(c.unitMinor?' | '+moneyText(c.unitMinor,c.currency):'')+' | '+(c.closed?'مغلقة':'مفتوحة')+'<span style="display:block">'+esc(bagStockText(c))+'</span></small></div><div class="actions">'+btn('تعديل','cycle-edit',c.id,'','edit')+btn(c.closed?'إعادة فتح':'إغلاق','cycle-close',c.id,'muted','edit')+btn('حذف','cycle-delete',c.id,'danger','delete')+btn('كشف','cycle-statement',c.id,'','reports')+'</div></div>').join('')||'لا توجد دورات'}
 function visibleDist(){
  const c=cycleFor('distCycle'),status=$('distStatus').value;
  if(!c)return [];
@@ -450,7 +450,7 @@ function distControls(c,f){
  const id=esc(f.id);
  return '<input type="checkbox" aria-label="تحديد" data-pick="'+id+'" '+(chosen.has(f.id)?'checked':'')+'><input type="number" min="1" aria-label="الكمية" data-quota="'+id+'" value="'+esc(qtyForFamily(c,f.id))+'">'+btn('تسليم','dist-add',f.id);
 }
-function dist(){let c=cycleFor('distCycle');let w=pageWindow(visibleDist(),distPage);distPage=w.p;pageControls('dist',w);let rows=w.rows;$('distList').innerHTML=!c?'اختر حقيبة':rows.map(f=>{let d=findD(c.id,f.id),a=allocated(c.id,f.id);let id=esc(f.id);return '<div class="row"><div><b>'+f.no+' · '+esc(f.name)+'</b><small>رابط الأسرة: '+esc(f.house||'—')+' | مربع: '+esc(f.square||'—')+' | أفراد: '+esc(membersText(f))+(d?' | القيمة: '+esc(rowAmount(d)):(c.unitMinor&&qtyForFamily(c,f.id)!=null?' | مقترح: '+esc(moneyText(c.unitMinor*Number(qtyForFamily(c,f.id)),c.currency)):'') )+'</small></div><div class="actions">'+(a?esc(a.distributorName)+' · '+(d?'تم التسليم: '+d.q:a.managed?'الصلاحية للأم':a.locked?'بانتظار تأكيد الاسترداد':'مخصص للموزع')+(!c.closed&&can('admin')?(d?btn('تعديل','dist-edit',f.id)+btn('حذف','dist-delete',f.id,'danger'):a.managed?distControls(c,f):!a.locked?btn('استرداد الصلاحية','dist-recall',f.id):''):''):d?'تم: '+d.q+(!c.closed?btn('تعديل','dist-edit',f.id,'','edit')+btn('حذف','dist-delete',f.id,'danger','delete'):''):(!c.closed&&can('add')?distControls(c,f):'لم يستلم'))+'</div></div>'}).join('')||'لا توجد أسر مطابقة';$('selectionSummary').textContent=chosen.size+' محدد';$('bulkActions').hidden=!c||c.closed||!can('add');document.querySelectorAll('[data-perm]').forEach(el=>{el.hidden=!can(el.dataset.perm);el.disabled=el.hidden})}
+function dist(){let c=cycleFor('distCycle');$('distStockStatus').textContent=c?bagStockText(c):'اختر الحقيبة لعرض الرصيد';let w=pageWindow(visibleDist(),distPage);distPage=w.p;pageControls('dist',w);let rows=w.rows;$('distList').innerHTML=!c?'اختر حقيبة':rows.map(f=>{let d=findD(c.id,f.id),a=allocated(c.id,f.id);let id=esc(f.id);return '<div class="row"><div><b>'+f.no+' · '+esc(f.name)+'</b><small>رابط الأسرة: '+esc(f.house||'—')+' | مربع: '+esc(f.square||'—')+' | أفراد: '+esc(membersText(f))+(d?' | القيمة: '+esc(rowAmount(d)):(c.unitMinor&&qtyForFamily(c,f.id)!=null?' | مقترح: '+esc(moneyText(c.unitMinor*Number(qtyForFamily(c,f.id)),c.currency)):'') )+'</small></div><div class="actions">'+(a?esc(a.distributorName)+' · '+(d?'تم التسليم: '+d.q:a.managed?'الصلاحية للأم':a.locked?'بانتظار تأكيد الاسترداد':'مخصص للموزع')+(!c.closed&&can('admin')?(d?btn('تعديل','dist-edit',f.id)+btn('حذف','dist-delete',f.id,'danger'):a.managed?distControls(c,f):!a.locked?btn('استرداد الصلاحية','dist-recall',f.id):''):''):d?'تم: '+d.q+(!c.closed?btn('تعديل','dist-edit',f.id,'','edit')+btn('حذف','dist-delete',f.id,'danger','delete'):''):(!c.closed&&can('add')?distControls(c,f):'لم يستلم'))+'</div></div>'}).join('')||'لا توجد أسر مطابقة';$('selectionSummary').textContent=chosen.size+' محدد';$('bulkActions').hidden=!c||c.closed||!can('add');document.querySelectorAll('[data-perm]').forEach(el=>{el.hidden=!can(el.dataset.perm);el.disabled=el.hidden})}
 const latinDigits=value=>String(value??'').replace(/[٠-٩۰-۹]/g,ch=>String(ch.charCodeAt(0)-(ch.charCodeAt(0)>=1776?1776:1632))).replace(/٫/g,'.').replace(/٬/g,'');
 const moneyCurrency=c=>({YER:'ريال يمني',SAR:'ريال سعودي',USD:'دولار أمريكي'})[c]||'';
 function moneyMinor(raw,allowZero=false){
@@ -545,15 +545,42 @@ function hasMembers(f){const n=Number(f?.members);return f?.members!==null&&f?.m
 function membersText(f){return hasMembers(f)?latinDigits(f.members):'غير محدد'}
 function needsMembers(c,f){const {two,three}=aidRules(c);return (two!==null||three!==null)&&!hasMembers(f)}
 function aidQuota(c,f){const {two,three}=aidRules(c);if((two!==null||three!==null)&&!hasMembers(f))return null;const n=Number(f.members);return three!==null&&n>three?3:two!==null&&n>two?2:Number(c.quota)}
+/** Inventory includes deliveries and unresolved offline allocations (not twice). */
+function bagStock(c){
+ const total=String(c?.stockTotal??'').trim()?Number(c.stockTotal):null;
+ const warn=Number(c?.stockWarningAt??0);
+ const delivered=data.deliveries.filter(d=>d.c===c.id).reduce((sum,d)=>sum+Number(d.q),0);
+ const received=new Set(data.deliveries.filter(d=>d.c===c.id).map(d=>d.f));
+ const reserved=motherAllocations.filter(a=>a.cycle===c.id&&!a.returned&&!received.has(a.family))
+    .reduce((sum,a)=>sum+Number(a.maxQty),0);
+ const available=total===null?null:total-delivered-reserved;
+ return {total,warning:warn,delivered,reserved,available};
+}
+function bagStockText(c){
+ const b=bagStock(c);
+ if(b.total===null)return 'حدد إجمالي عطايا الحقيبة لإتاحة التوزيع';
+ const numbers='المقرر: '+b.total+' | المصروف: '+b.delivered+' | المحجوز: '+b.reserved+' | المتاح: '+b.available;
+ const warning=b.available<=0?' ⛔ نفد رصيد الحقيبة':b.warning>0&&b.available<=b.warning?' ⚠️ تنبيه: اقترب نفاد العطايا':'';
+ return numbers+warning;
+}
+function bagCheck(c,extra=0){
+ const b=bagStock(c);
+ if(b.total===null){alert('حدد إجمالي عطايا الحقيبة من قسم الحقائب قبل الصرف');return false;}
+ if(!Number.isSafeInteger(b.total)||b.total<1||b.total>1000000||!Number.isSafeInteger(extra)||b.available<extra){
+   alert('لا يمكن الصرف: الرصيد المتاح '+Math.max(0,b.available)+' عطية فقط، بعد خصم المصروف والمحجوز للموزعين.');
+   return false;
+ }
+ return true;
+}
 function suggestedAid(c,f){return allocated(c.id,f.id)?.maxQty??aidQuota(c,f)}
 function qtyForFamily(c,id){const f=lookup(data.families,id);if(f&&needsMembers(c,f))return null;return quotas[id]??(f?suggestedAid(c,f):c.quota)}
 function validQty(v){let q=Number(v);return Number.isSafeInteger(q)&&q>0?q:null}
-function deliver(c,f,q,actualMinor){if(!c||c.closed||allocated(c.id,f)||!lookup(data.families,f)||lookup(data.families,f).archived||needsMembers(c,lookup(data.families,f))||findD(c.id,f)||!validQty(q))return false;
+function deliver(c,f,q,actualMinor){if(!c||c.closed||allocated(c.id,f)||!lookup(data.families,f)||lookup(data.families,f).archived||needsMembers(c,lookup(data.families,f))||findD(c.id,f)||!validQty(q))return false;if(!bagCheck(c,Number(q)))return false;
  const snapshot=moneySnapshot(c,Number(q),actualMinor);
  data.deliveries.push({c:c.id,f,q:Number(q),at:new Date().toISOString(),by:activeUser.username,...(snapshot||{})});return true}
 $('selectVisible').onclick=()=>{if(!requireP('add'))return;let c=cycleFor('distCycle');if(!c||c.closed)return;visibleDist().forEach(f=>{if(!needsMembers(c,f)&&!findD(c.id,f.id)&&(!allocated(c.id,f.id)||(deviceRole==='mother'&&can('admin')&&allocated(c.id,f.id).managed)))chosen.add(f.id)});dist()};
 $('clearSelected').onclick=()=>{chosen.clear();dist()};
-$('bulkDeliver').onclick=()=>{if(!requireP('add'))return;let c=cycleFor('distCycle');if(!c||c.closed)return;let rows=[...chosen].filter(f=>lookup(data.families,f)&&!findD(c.id,f)&&(!allocated(c.id,f)||(deviceRole==='mother'&&can('admin')&&allocated(c.id,f).managed)));if(!rows.length)return alert('حدد الأسر أولًا');if(rows.some(id=>needsMembers(c,lookup(data.families,id))))return alert('أكمل عدد أفراد الأسرة قبل اعتماد استحقاق مرتبط بعدد الأفراد');if(rows.some(f=>!validQty(qtyForFamily(c,f))))return alert('تحقق من الكميات');if(deviceRole==='mother'&&can('admin')&&rows.some(f=>allocated(c.id,f))){nativeHost.motherDeliveryBatch(activeUser.id,c.id,'add',JSON.stringify(Object.fromEntries(rows.map(f=>[f,Number(qtyForFamily(c,f))]))));return;}if(!confirm('تأكيد تسليم '+rows.length+' أسرة؟'))return;rows.forEach(f=>deliver(c,f,qtyForFamily(c,f)));chosen.clear();save();refresh()};
+$('bulkDeliver').onclick=()=>{if(!requireP('add'))return;let c=cycleFor('distCycle');if(!c||c.closed)return;let rows=[...chosen].filter(f=>lookup(data.families,f)&&!findD(c.id,f)&&(!allocated(c.id,f)||(deviceRole==='mother'&&can('admin')&&allocated(c.id,f).managed)));if(!rows.length)return alert('حدد الأسر أولًا');if(rows.some(id=>needsMembers(c,lookup(data.families,id))))return alert('أكمل عدد أفراد الأسرة قبل اعتماد استحقاق مرتبط بعدد الأفراد');if(rows.some(f=>!validQty(qtyForFamily(c,f))))return alert('تحقق من الكميات');const batchQuantity=rows.reduce((sum,f)=>sum+Number(qtyForFamily(c,f)),0);if(!bagCheck(c,batchQuantity))return;if(deviceRole==='mother'&&can('admin')&&rows.some(f=>allocated(c.id,f))){nativeHost.motherDeliveryBatch(activeUser.id,c.id,'add',JSON.stringify(Object.fromEntries(rows.map(f=>[f,Number(qtyForFamily(c,f))]))));return;}if(!confirm('تأكيد تسليم '+rows.length+' أسرة؟'))return;rows.forEach(f=>deliver(c,f,qtyForFamily(c,f)));chosen.clear();save();refresh()};
 $('distList').onchange=e=>{let t=e.target;if(t.dataset.pick){t.checked?chosen.add(t.dataset.pick):chosen.delete(t.dataset.pick);$('selectionSummary').textContent=chosen.size+' محدد'}};
 $('distList').oninput=e=>{if(e.target.dataset.quota)quotas[e.target.dataset.quota]=e.target.value};
 function rowsFor(c,mode){
@@ -581,7 +608,7 @@ function printRows(){
  '<tr><th>اسم الحقيبة</th><td>'+esc(c.title)+'</td><th>المسؤول / المورد</th><td>'+esc(c.donor||'-')+'</td></tr>'+
  '<tr><th>نوع القيمة</th><td colspan="3">'+esc(valueMeta)+'</td></tr>'+
  '<tr><th>التفاصيل</th><td colspan="3">'+esc(c.details||'-')+'</td></tr>'+
- '<tr><th>عدد الأسر</th><td>'+rows.length+'</td><th>تاريخ الإصدار</th><td>'+today()+'</td></tr></table>'+
+ '<tr><th>عدد الأسر</th><td>'+rows.length+'</td><th>تاريخ الإصدار</th><td>'+today()+'</td></tr>'+ '<tr><th>رصيد الحقيبة</th><td colspan="3">'+esc(bagStockText(c))+'</td></tr></table>'+
  '<table class="stmt-table"><thead><tr><th>م</th><th>المسجل</th><th>رابط الأسرة/رقم المنزل / المربع / المنطقة</th><th>الأفراد</th><th>الفئة</th><th>الكمية</th><th>القيمة النقدية / المقابلة</th><th class="no-print">إجراء</th></tr></thead><tbody>'+
  rows.map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(r.f.name)+'</td><td>'+esc(r.f.house||'—')+' / '+esc(r.f.square||'—')+' / '+esc(r.f.area||(data.area==='غير محدد'?'—':data.area))+'</td>'+
  '<td>'+esc(membersText(r.f))+'</td><td>'+esc(r.f.categories||'-')+'</td><td><b>'+(r.d?.q||'—')+'</b></td>'+
@@ -889,7 +916,7 @@ if(/^(dist|stmt|report)-(add|edit|delete)$/.test(a)){let [where,op]=a.split('-')
    const amount=valuePrompt(c,q);if(amount===undefined)return;
    if(!d&&deliver(c,id,q,amount)){chosen.delete(id);save();refresh()}else alert('تحقق من الكمية أو حالة التسليم');
   }catch(e){alert(e.message)}
- }if(op==='edit'&&d){let raw=prompt('تعديل عدد العطايا',d.q);if(raw===null)return;let q=validQty(latinDigits(raw));if(!q)return alert('أدخل عددًا صحيحًا موجبًا');
+ }if(op==='edit'&&d){let raw=prompt('تعديل عدد العطايا',d.q);if(raw===null)return;let q=validQty(latinDigits(raw));if(!q)return alert('أدخل عددًا صحيحًا موجبًا');if(!bagCheck(c,q-Number(d.q)))return;
  let revised=null;
  try{
   if(d.amountMinor!=null){const oldBag={valueKind:d.valueKind,currency:d.currency,unitMinor:d.unitMinor};const amount=valuePrompt(oldBag,q,q===d.q?d:null);if(amount===undefined)return;revised=moneySnapshot(oldBag,q,amount)}
