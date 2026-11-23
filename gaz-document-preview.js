@@ -38,7 +38,8 @@ function definition(s){
  const grid={hLineWidth:()=>.5,vLineWidth:()=>.5,hLineColor:()=> '#94a3b8',vLineColor:()=> '#94a3b8',paddingLeft:()=>4,paddingRight:()=>4,paddingTop:()=>4,paddingBottom:()=>4};
  const meta=metaRows(s).map(row=>[cell(row[3]),cell(row[2],{bold:true,fillColor:'#f1f5f9'}),cell(row[1]),cell(row[0],{bold:true,fillColor:'#f1f5f9'})]);
  // RTL table columns are reversed for pdfmake's visual left-to-right column order.
- meta.splice(2,0,[cell(s.cycle.details,{colSpan:3}),{}, {},cell('التفاصيل',{bold:true,fillColor:'#f1f5f9'})]);
+ if(s.cycle.details&&s.cycle.details!=='-'&&s.cycle.details!=='—')
+  meta.splice(2,0,[cell(s.cycle.details,{colSpan:3}),{}, {},cell('التفاصيل',{bold:true,fillColor:'#f1f5f9'})]);
  const cols=visibleColumns(s).slice().reverse();
  const body=[
   cols.map(col=>cell(col.title,{bold:true,alignment:'center',fillColor:'#e2e8f0'})),
