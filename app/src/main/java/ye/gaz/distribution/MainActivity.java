@@ -647,7 +647,7 @@ public final class MainActivity extends Activity {
         try{String r=store.role();if(("mother".equals(r)||"independent".equals(r))&&store.admin(admin))return true;}catch(Exception ignored){}
         msg("هذه الصلاحية لمدير الجوال الأم");return false;
     }
-    private void exportExcelTemplate(String admin){if(!excelAllowed(admin))return;workers.execute(()->{try{File f=tempFile("Rafd_Beneficiaries_100",".xlsx",BeneficiaryExcel.template());runOnUiThread(()->{if(excelAllowed(admin))savePicker(f,BeneficiaryExcel.MIME);});}catch(Exception e){msg("تعذر إنشاء نموذج Excel");}});}
+    private void exportExcelTemplate(String admin){if(!excelAllowed(admin))return;workers.execute(()->{try{File f=tempFile("Rafd_Beneficiaries_1000",".xlsx",BeneficiaryExcel.template());runOnUiThread(()->{if(excelAllowed(admin))savePicker(f,BeneficiaryExcel.MIME);});}catch(Exception e){msg("تعذر إنشاء نموذج Excel");}});}
     private void chooseExcel(String admin){
         if(!excelAllowed(admin))return;excelAdmin=admin;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);
         try{startActivityForResult(i,IMPORT_EXCEL);}catch(Exception e){excelAdmin=null;msg("تعذر فتح الملفات");}
@@ -657,7 +657,10 @@ public final class MainActivity extends Activity {
             byte[] raw;try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("لا يمكن قراءة الملف");ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(b.size()+n>BeneficiaryExcel.MAX)throw new IOException("حجم الملف كبير");b.write(buf,0,n);}raw=b.toByteArray();}
             JSONArray input=BeneficiaryExcel.read(raw);JSONObject p=store.importPreview(admin,input);JSONArray valid=p.getJSONArray("valid"),errors=p.getJSONArray("errors");
             runOnUiThread(()->{if(!excelAllowed(admin))return;LinearLayout layout=pairLayout();pairText(layout,"عدد الصفوف: "+input.length()+" | صالحة: "+valid.length()+" | تحتاج تصحيح: "+errors.length());
-                for(int j=0;j<errors.length();j++)pairText(layout,errors.optString(j));if(errors.length()==0)for(int j=0;j<valid.length();j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | رابط الأسرة: "+(f.optString("house").isEmpty()?"—":f.optString("house"))+" | مربع "+f.optString("square"));}
+                for(int j=0;j<Math.min(errors.length(),40);j++)pairText(layout,errors.optString(j));
+                if(errors.length()>40)pairText(layout,"توجد "+(errors.length()-40)+" ملاحظات إضافية؛ صحّح الملف وأعد الاستيراد.");
+                if(errors.length()==0){for(int j=0;j<Math.min(valid.length(),40);j++){JSONObject f=valid.optJSONObject(j);pairText(layout,f.optString("name")+" | رابط الأسرة: "+(f.optString("house").isEmpty()?"—":f.optString("house"))+" | مربع "+f.optString("square"));}
+                    if(valid.length()>40)pairText(layout,"تُعرض أول 40 نتيجة فقط لضمان سرعة المعاينة، وسيتم اعتماد جميع السجلات الصحيحة وعددها "+valid.length()+".");}
                 ScrollView sc=new ScrollView(this);sc.addView(layout);AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle(errors.length()>0?"راجع الملف ثم أعد الاستيراد":"معاينة الاستيراد").setView(sc).setNegativeButton("إغلاق",null);
                 if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مسجلًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مسجلًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
             });
