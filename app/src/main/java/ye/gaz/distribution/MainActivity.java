@@ -61,7 +61,7 @@ public final class MainActivity extends Activity {
     private void activationScreen(){
         LinearLayout p=pairLayout();ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.addView(p);p.setBackgroundColor(Color.WHITE);
         TextView title=new TextView(this);title.setText("رفد");title.setTextSize(32);title.setTextColor(Color.rgb(0,94,88));title.setGravity(android.view.Gravity.CENTER);p.addView(title);
-        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.12");
+        pairText(p,"لإدارة المساعدات وتنظيمها");pairText(p,"تفعيل تصريح التشغيل — الإصدار 1.0.13");
         pairText(p,"أرسل معرّف الجهاز إلى المطور لطلب التصريح. تظل البيانات محفوظة حتى عند انتهاء التصريح.");
         TextView code=new TextView(this);code.setText(displayPermitDevice());code.setTextIsSelectable(true);code.setTextDirection(android.view.View.TEXT_DIRECTION_LTR);code.setTextSize(17);code.setGravity(android.view.Gravity.CENTER);p.addView(code);
         pairButton(p,"نسخ معرّف الجهاز",()->copyPermitDevice());
@@ -664,7 +664,7 @@ public final class MainActivity extends Activity {
                 if(errors.length()==0){for(int j=0;j<Math.min(valid.length(),40);j++){JSONObject f=valid.optJSONObject(j);pairText(layout,"رقم السجل المتوقع: "+(firstNo+j)+" | رقم المتابعة في الملاحظات: "+(f.optString("notes","").isEmpty()?"—":f.optString("notes"))+" | "+f.optString("name")+" | أفراد الأسرة: "+(f.isNull("members")?"غير محدد":f.optString("members"))+" | مربع "+f.optString("square"));}
                     if(valid.length()>40)pairText(layout,"تُعرض أول 40 نتيجة فقط لضمان سرعة المعاينة، وسيتم اعتماد جميع السجلات الصحيحة وعددها "+valid.length()+".");}
                 ScrollView sc=new ScrollView(this);sc.addView(layout);AlertDialog.Builder d=new AlertDialog.Builder(this).setTitle(errors.length()>0?"راجع الملف ثم أعد الاستيراد":"معاينة الاستيراد").setView(sc).setNegativeButton("إغلاق",null);
-                if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مسجلًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مسجلًا");});}catch(Exception e){msg("لم يتم الحفظ؛ راجع التكرار أو تغيّر البيانات");}});});d.show();
+                if(errors.length()==0)d.setPositiveButton("اعتماد "+valid.length()+" مسجلًا",(v,w)->{if(!excelAllowed(admin))return;workers.execute(()->{try{int count=store.importBeneficiaries(admin,input);runOnUiThread(()->{notifyPairChange();msg("تمت إضافة "+count+" مسجلًا");});}catch(Exception e){android.util.Log.e("RafdExcel","Excel save failed",e);runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر حفظ المستفيدين").setMessage(e instanceof org.json.JSONException?"بيانات غير متوافقة مع قواعد السجل؛ أعد المعاينة وراجع الأخطاء.":e instanceof SecurityException?"ليس لديك صلاحية الاستيراد أو انتهت الجلسة.":"فشل الحفظ دون إضافة سجلات. تحقق من مساحة الجهاز ثم أعد المحاولة.").setPositiveButton("إغلاق",null).show());}});});d.show();
             });
         }catch(Exception e){String message=e instanceof IOException?e.getMessage():"اختر ملف XLSX مطابقًا للنموذج";runOnUiThread(()->new AlertDialog.Builder(this).setTitle("تعذر الاستيراد").setMessage(message+"\nلم تُضف أي بيانات.").setPositiveButton("إغلاق",null).show());}});
     }
