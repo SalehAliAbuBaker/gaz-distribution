@@ -136,6 +136,12 @@ final class GazStore extends SQLiteOpenHelper {
         if(!f.has("members"))return false;
         Object raw=f.opt("members");
         if(raw==JSONObject.NULL)return true;
+        if(raw instanceof String){
+            String value=((String)raw).trim();
+            if(!value.matches("[0-9]{1,4}"))return false;
+            int n=Integer.parseInt(value);
+            return n>=1&&n<=1000;
+        }
         if(!(raw instanceof Number))return false;
         double value=((Number)raw).doubleValue();
         return Double.isFinite(value)&&value>=1&&value<=1000&&value==Math.rint(value);
