@@ -40,6 +40,7 @@ jobs:
           node scripts/test-ui-performance.cjs
           node scripts/test-stock.cjs
           node scripts/test-focus.cjs
+          node scripts/test-statement.cjs
       - name: Build debug APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :issuer:assembleRelease
       - name: Verify APK and compare previous test signature
