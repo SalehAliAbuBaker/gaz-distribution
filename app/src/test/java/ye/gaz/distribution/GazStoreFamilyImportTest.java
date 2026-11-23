@@ -66,5 +66,9 @@ public class GazStoreFamilyImportTest {
         family.put("members",5);
         assertTrue(GazStore.validFamilyMembers(family));
         GazStore.flatten(state);
+        // Older manual entries used FormData text; existing devices must remain writable.
+        family.put("members","5");
+        assertTrue(GazStore.validFamilyMembers(family));
+        GazStore.flatten(state);
     }
 }
