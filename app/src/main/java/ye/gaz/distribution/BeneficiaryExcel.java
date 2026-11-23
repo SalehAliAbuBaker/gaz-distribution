@@ -79,12 +79,15 @@ final class BeneficiaryExcel {
         check(input.length()<=LIMIT,"الحد 1000 مستفيد");
         for(int i=0;i<input.length();i++){JSONObject x=input.getJSONObject(i);int row=x.getInt("row");try{
             String name=x.getString("name").trim(),house=x.getString("house").trim();check(!name.isEmpty(),"الاسم مطلوب");check(name.length()<=200&&house.length()<=200&&x.getString("square").length()<=80&&x.getString("area").length()<=100&&x.getString("phone").length()<=50&&x.getString("categories").length()<=300&&x.getString("notes").length()<=1000,"إحدى القيم طويلة جدًا");
-            int members=boundedNumber(digit(x.getString("members"))).intValueExact();check(members>=1&&members<=1000,"عدد أفراد الأسرة غير صالح");
+            String rawMembers=x.optString("members","").trim();int members=0;if(!rawMembers.isEmpty()){members=boundedNumber(digit(rawMembers)).intValueExact();check(members>=1&&members<=1000,"عدد أفراد الأسرة غير صالح");}
             String need=x.getString("need").trim();check(need.length()<=200,"نسبة الاحتياج لا تتجاوز 200 حرف");
             String id;try{id=RafdIdentityNumber.normalize(x.optString("identityNo",""));}catch(IllegalArgumentException e){throw new IOException(e.getMessage());}String normalized=AllocationSelection.norm(name);check(!names.contains(normalized),"اسم مكرر داخل الملف أو التطبيق");check(id.isEmpty()||!ids.contains(id),"رقم هوية مكرر داخل الملف أو التطبيق");names.add(normalized);if(!id.isEmpty())ids.add(id);
-            JSONObject f=new JSONObject();for(String k:KEYS)f.put(k,x.optString(k,""));f.put("name",name).put("house",house).put("members",members).put("need",need).put("identityNo",id).put("row",row);valid.put(f);
+            JSONObject f=new JSONObject();for(String k:KEYS)f.put(k,x.optString(k,""));f.put("name",name).put("house",house).put("members",rawMembers.isEmpty()?JSONObject.NULL:members).put("need",need).put("identityNo",id).put("row",row);valid.put(f);
         }catch(Exception e){String msg=e instanceof IOException?e.getMessage():"عدد أفراد الأسرة غير صالح";errors.put("الصف "+row+": "+msg);}}
-        return new JSONObject().put("valid",valid).put("errors",errors);
+        long firstNo=data.optLong("n",0)+1;int tracking=0,matched=0;
+        for(int i=0;i<valid.length();i++){String note=AllocationSelection.norm(valid.getJSONObject(i).optString("notes",""));
+            if(note.matches("[0-9]{1,18}")){tracking++;try{if(Long.parseLong(note)==firstNo+i)matched++;}catch(NumberFormatException ignored){}}}
+        return new JSONObject().put("valid",valid).put("errors",errors).put("firstNo",firstNo).put("tracking",tracking).put("trackingMatches",matched);
     }
     static int append(JSONObject data,JSONArray input)throws Exception{
         JSONObject result=preview(data,input);JSONArray valid=result.getJSONArray("valid");check(result.getJSONArray("errors").length()==0&&valid.length()>0,"البيانات تغيرت أو توجد أخطاء؛ أعد الاستيراد");long n=data.getLong("n");JSONArray families=data.getJSONArray("families");
